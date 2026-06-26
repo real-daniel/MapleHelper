@@ -1,0 +1,32 @@
+package app.maplehelper.equipment;
+
+public enum EquipmentSlot {
+    RING_1,
+    RING_2,
+    RING_3,
+    RING_4,
+    PENDANT_1,
+    PENDANT_2,
+    WEAPON,
+    SECONDARY,
+    EMBLEM,
+    HAT,
+    FACE,
+    EYE,
+    EARRINGS,
+    TOP,
+    BOTTOM,
+    SHOES,
+    GLOVES,
+    CAPE,
+    BELT,
+    SHOULDER,
+    POCKET,
+    BADGE,
+    MEDAL,
+    ANDROID,
+    HEART,
+    TOTEM_1,
+    TOTEM_2,
+    TOTEM_3
+}

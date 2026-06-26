@@ -1,0 +1,31 @@
+spring:
+  application:
+    name: maplehelper-backend
+  r2dbc:
+    url: ${DATABASE_URL:r2dbc:postgresql://localhost:5433/maplehelper}
+    username: ${DATABASE_USERNAME:maplehelper}
+    password: ${DATABASE_PASSWORD:maplehelper}
+  flyway:
+    url: ${MIGRATION_DATABASE_URL:jdbc:postgresql://localhost:5433/maplehelper}
+    user: ${DATABASE_USERNAME:maplehelper}
+    password: ${DATABASE_PASSWORD:maplehelper}
+
+server:
+  port: ${PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+maplehelper:
+  frontend-origin: ${FRONTEND_ORIGIN:http://localhost:3000}
+  nexon-rankings:
+    base-url: https://www.nexon.com
+    user-agent: MapleHelper/0.1 (+https://github.com/)
+  ocr:
+    tesseract-command: ${TESSERACT_COMMAND:tesseract}
+  cv:
+    python-command: ${PYTHON_COMMAND:python}
+    star-counter-script: ${STAR_COUNTER_SCRIPT:scripts/count_starforce.py}
