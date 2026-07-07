@@ -27,6 +27,9 @@ public record ConfirmEquipmentRequest(
         @Size(max = 4000)
         String statLines,
 
+        @Size(max = 4000)
+        String flameStats,
+
         @Size(max = 30)
         String potentialTier,
 

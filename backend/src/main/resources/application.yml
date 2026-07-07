@@ -29,3 +29,4 @@ maplehelper:
   cv:
     python-command: ${PYTHON_COMMAND:python}
     star-counter-script: ${STAR_COUNTER_SCRIPT:scripts/count_starforce.py}
+    flame-extractor-script: ${FLAME_EXTRACTOR_SCRIPT:scripts/extract_flame_stats.py}

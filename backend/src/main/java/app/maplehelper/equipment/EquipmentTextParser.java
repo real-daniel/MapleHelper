@@ -5,6 +5,7 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -15,6 +16,11 @@ public class EquipmentTextParser {
     private static final Pattern POTENTIAL_TIER_PATTERN = Pattern.compile("(?i)(bonus\\s+)?potential\\s*:?\\s*(rare|epic|unique|legendary)");
     private static final Pattern STAT_LINE_PATTERN = Pattern.compile(
             "(?i)^(str|dex|int|luk|all\\s*stats?|max\\s*hp|max\\s*mp|attack\\s*power|magic\\s*att|defense|speed|jump|boss\\s*damage|enemy\\s*def\\s*ignored)\\b.*");
+    private static final Pattern EQUIPMENT_STAT_COMPONENT_PATTERN = Pattern.compile(
+            "(?i)^(str|dex|int|luk|all\\s*stats?|max\\s*hp|max\\s*mp|attack\\s*power|magic\\s*att|defense|speed|jump)\\b\\s*[:+ ]*([+\\-]?\\s*\\d{1,5}\\s*%?)\\s*\\(([^)]*)\\).*");
+    private static final Pattern COMPONENT_VALUE_PATTERN = Pattern.compile("([+\\-]?\\s*\\d{1,5}\\s*%?)");
+    private static final Pattern POTENTIAL_LINE_PATTERN = Pattern.compile(
+            "(?i).*?\\b(str|dex|int|luk|all\\s*stats?|boss\\s*damage|damage|critical\\s*damage|crit(?:ical)?\\s*dmg|attack\\s*power|att(?:ack)?|magic\\s*att(?:ack)?|m\\.\\s*att(?:ack)?|item\\s*drop(?:\\s*rate)?|drop\\s*rate|meso(?:s)?(?:\\s*obtained)?|enemy\\s*def(?:ense)?\\s*ignored|ignore\\s*enemy\\s*def(?:ense)?|ied)\\b\\s*[':;/| ]*([+\\-]?\\s*\\d{1,3}\\s*%?).*");
 
     public ParsedEquipmentText parse(String rawText, Integer starForce) {
         List<String> lines = rawText == null ? List.of() : rawText.lines()
@@ -24,9 +30,10 @@ public class EquipmentTextParser {
 
         EquipmentSlot slot = findSlot(lines);
         String name = findName(lines);
-        Integer levelRequirement = findLevelRequirement(lines);
+        Integer levelRequirement = correctLevelRequirement(name, findLevelRequirement(lines));
 
         List<String> statLines = new ArrayList<>();
+        List<String> flameStats = new ArrayList<>();
         List<String> potentialLines = new ArrayList<>();
         List<String> bonusPotentialLines = new ArrayList<>();
         String potentialTier = "";
@@ -56,13 +63,19 @@ public class EquipmentTextParser {
                 inBonusPotential = false;
             }
 
-            if (isPotentialLine(line)) {
+            Optional<String> potentialLine = cleanPotentialLine(line);
+            if (potentialLine.isPresent() && (inBonusPotential || inPotential)) {
                 if (inBonusPotential) {
-                    bonusPotentialLines.add(line);
-                } else if (inPotential || !potentialTier.isBlank()) {
-                    potentialLines.add(line);
+                    bonusPotentialLines.add(potentialLine.get());
+                } else {
+                    potentialLines.add(potentialLine.get());
                 }
                 continue;
+            }
+
+            Optional<String> flameLine = cleanFlameLine(line, starForce);
+            if (flameLine.isPresent()) {
+                flameStats.add(flameLine.get());
             }
 
             if (STAT_LINE_PATTERN.matcher(line).matches()) {
@@ -76,6 +89,7 @@ public class EquipmentTextParser {
                 levelRequirement,
                 starForce,
                 String.join(System.lineSeparator(), statLines),
+                String.join(System.lineSeparator(), flameStats),
                 potentialTier,
                 String.join(System.lineSeparator(), potentialLines),
                 bonusPotentialTier,
@@ -172,8 +186,135 @@ public class EquipmentTextParser {
         return null;
     }
 
-    private boolean isPotentialLine(String line) {
-        return line.matches("(?i)^(str|dex|int|luk|all\\s*stats?|boss\\s*damage|damage|critical\\s*damage|attack\\s*power|magic\\s*att|item\\s*drop|meso).*[-+]?\\d+%?.*");
+    private Integer correctLevelRequirement(String name, Integer levelRequirement) {
+        String lower = name.toLowerCase(Locale.ROOT);
+        if (lower.contains("eternal") && (levelRequirement == null || (levelRequirement >= 240 && levelRequirement <= 260))) {
+            return 250;
+        }
+
+        return levelRequirement;
+    }
+
+    private Optional<String> cleanPotentialLine(String line) {
+        Matcher matcher = POTENTIAL_LINE_PATTERN.matcher(line);
+        if (!matcher.matches()) {
+            return Optional.empty();
+        }
+
+        String stat = normalizePotentialStat(matcher.group(1));
+        String value = matcher.group(2).replaceAll("\\s+", "");
+        if (!value.startsWith("+") && !value.startsWith("-")) {
+            value = "+" + value;
+        }
+
+        return Optional.of(stat + ": " + value);
+    }
+
+    private Optional<String> cleanFlameLine(String line, Integer starForce) {
+        if (!STAT_LINE_PATTERN.matcher(line).matches()) {
+            return Optional.empty();
+        }
+
+        Matcher matcher = EQUIPMENT_STAT_COMPONENT_PATTERN.matcher(line);
+        if (!matcher.matches()) {
+            return Optional.empty();
+        }
+
+        String stat = normalizeEquipmentStat(matcher.group(1));
+        String total = normalizeNumber(matcher.group(2));
+        List<String> components = componentValues(matcher.group(3));
+        if (components.isEmpty()) {
+            return Optional.empty();
+        }
+
+        String flameValue = inferFlameValue(stat, total, components, starForce);
+        if (flameValue == null || isZero(flameValue)) {
+            return Optional.empty();
+        }
+
+        return Optional.of(stat + ": " + flameValue);
+    }
+
+    private List<String> componentValues(String value) {
+        List<String> values = new ArrayList<>();
+        Matcher matcher = COMPONENT_VALUE_PATTERN.matcher(value);
+        while (matcher.find()) {
+            values.add(normalizeNumber(matcher.group(1)));
+        }
+
+        return values;
+    }
+
+    private String inferFlameValue(String stat, String total, List<String> components, Integer starForce) {
+        if (components.size() >= 3) {
+            return components.get(components.size() - 1);
+        }
+
+        if (components.size() == 1 && stripPercent(total).equals(stripPercent(components.getFirst()))) {
+            return components.getFirst();
+        }
+
+        if (components.size() == 2 && starForce != null && starForce <= 0) {
+            return components.get(1);
+        }
+
+        return null;
+    }
+
+    private String normalizeEquipmentStat(String value) {
+        String normalized = value.toLowerCase(Locale.ROOT).replaceAll("\\s+", " ").trim();
+        return switch (normalized) {
+            case "str" -> "STR";
+            case "dex" -> "DEX";
+            case "int" -> "INT";
+            case "luk" -> "LUK";
+            case "all stat", "all stats" -> "All Stats";
+            case "max hp" -> "Max HP";
+            case "max mp" -> "Max MP";
+            case "attack power" -> "Attack Power";
+            case "magic att" -> "Magic Attack";
+            case "defense" -> "Defense";
+            case "speed" -> "Speed";
+            case "jump" -> "Jump";
+            default -> capitalize(normalized);
+        };
+    }
+
+    private String normalizeNumber(String value) {
+        String normalized = value.replaceAll("\\s+", "");
+        if (!normalized.startsWith("+") && !normalized.startsWith("-")) {
+            normalized = "+" + normalized;
+        }
+
+        return normalized;
+    }
+
+    private boolean isZero(String value) {
+        return stripPercent(value).replace("+", "").replace("-", "").matches("0+");
+    }
+
+    private String stripPercent(String value) {
+        return value.replace("%", "");
+    }
+
+    private String normalizePotentialStat(String value) {
+        String normalized = value.toLowerCase(Locale.ROOT).replaceAll("\\s+", " ").trim();
+        return switch (normalized) {
+            case "str" -> "STR";
+            case "dex" -> "DEX";
+            case "int" -> "INT";
+            case "luk" -> "LUK";
+            case "all stat", "all stats" -> "All Stats";
+            case "boss damage" -> "Boss Damage";
+            case "damage" -> "Damage";
+            case "critical damage", "critical dmg", "crit dmg" -> "Critical Damage";
+            case "attack power", "attack", "att" -> "Attack Power";
+            case "magic att", "magic attack", "m. att", "m. attack" -> "Magic Attack";
+            case "item drop", "item drop rate", "drop rate" -> "Item Drop Rate";
+            case "meso", "mesos", "meso obtained", "mesos obtained" -> "Meso Obtained";
+            case "enemy def ignored", "enemy defense ignored", "ignore enemy def", "ignore enemy defense", "ied" -> "Enemy Defense Ignored";
+            default -> capitalize(normalized);
+        };
     }
 
     private String capitalize(String value) {

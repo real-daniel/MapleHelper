@@ -43,6 +43,11 @@ public class EquipmentController {
         return service.findAll(characterProfileId);
     }
 
+    @GetMapping("/catalog")
+    public Flux<EquipmentCatalogItem> findCatalog(@RequestParam(required = false) EquipmentSlot slot) {
+        return service.findCatalog(slot);
+    }
+
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public Mono<Void> delete(@PathVariable Long id) {

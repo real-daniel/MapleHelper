@@ -8,6 +8,7 @@ public record EquipmentExtractionDraft(
         Integer levelRequirement,
         Integer starForce,
         String statLines,
+        String flameStats,
         String potentialTier,
         String potentialLines,
         String bonusPotentialTier,

@@ -14,6 +14,7 @@ public record EquipmentItem(
         Integer levelRequirement,
         Integer starForce,
         String statLines,
+        String flameStats,
         String potentialTier,
         String potentialLines,
         String bonusPotentialTier,

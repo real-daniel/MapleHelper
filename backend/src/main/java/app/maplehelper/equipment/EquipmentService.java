@@ -25,25 +25,34 @@ public class EquipmentService {
     private static final int OCR_TIMEOUT_SECONDS = 20;
 
     private final EquipmentItemRepository repository;
+    private final EquipmentCatalogItemRepository catalogRepository;
     private final String tesseractCommand;
     private final String pythonCommand;
     private final String starCounterScript;
+    private final String flameExtractorScript;
     private final ObjectMapper objectMapper;
     private final EquipmentTextParser textParser;
+    private final EquipmentFlameCalculator flameCalculator;
 
     public EquipmentService(
             EquipmentItemRepository repository,
+            EquipmentCatalogItemRepository catalogRepository,
             @Value("${maplehelper.ocr.tesseract-command:tesseract}") String tesseractCommand,
             @Value("${maplehelper.cv.python-command:python}") String pythonCommand,
             @Value("${maplehelper.cv.star-counter-script:scripts/count_starforce.py}") String starCounterScript,
+            @Value("${maplehelper.cv.flame-extractor-script:scripts/extract_flame_stats.py}") String flameExtractorScript,
             ObjectMapper objectMapper,
-            EquipmentTextParser textParser) {
+            EquipmentTextParser textParser,
+            EquipmentFlameCalculator flameCalculator) {
         this.repository = repository;
+        this.catalogRepository = catalogRepository;
         this.tesseractCommand = tesseractCommand;
         this.pythonCommand = pythonCommand;
         this.starCounterScript = starCounterScript;
+        this.flameExtractorScript = flameExtractorScript;
         this.objectMapper = objectMapper;
         this.textParser = textParser;
+        this.flameCalculator = flameCalculator;
     }
 
     public Mono<EquipmentExtractionDraft> extractDraft(FilePart file) {
@@ -69,6 +78,10 @@ public class EquipmentService {
                                 .subscribeOn(Schedulers.boundedElastic())
                                 .map(extraction -> {
                                     ParsedEquipmentText parsed = textParser.parse(extraction.ocr().text(), extraction.starForce());
+                                    String flameStats = firstNonBlank(
+                                            flameCalculator.deriveFlameStats(parsed),
+                                            extraction.flameStats(),
+                                            parsed.flameStats());
                                     return new EquipmentExtractionDraft(
                                             file.filename(),
                                             byteCount,
@@ -77,6 +90,7 @@ public class EquipmentService {
                                             parsed.levelRequirement(),
                                             parsed.starForce(),
                                             parsed.statLines(),
+                                            flameStats,
                                             parsed.potentialTier(),
                                             parsed.potentialLines(),
                                             parsed.bonusPotentialTier(),
@@ -95,9 +109,10 @@ public class EquipmentService {
     private ImageExtractionResult extractImageData(byte[] imageBytes, String suffix) {
         OcrResult ocr = runOcr(imageBytes, suffix);
         StarForceResult starForce = countStarForce(imageBytes, suffix);
-        String status = ocr.status() + "+" + starForce.status();
-        String notes = ocr.notes() + " " + starForce.notes();
-        return new ImageExtractionResult(ocr, starForce.starForce(), status, notes);
+        FlameExtractionResult flameStats = extractFlameStats(imageBytes, suffix);
+        String status = ocr.status() + "+" + starForce.status() + "+" + flameStats.status();
+        String notes = ocr.notes() + " " + starForce.notes() + " " + flameStats.notes();
+        return new ImageExtractionResult(ocr, starForce.starForce(), flameStats.flameStats(), status, notes);
     }
 
     public Mono<EquipmentItem> confirm(ConfirmEquipmentRequest request) {
@@ -110,6 +125,7 @@ public class EquipmentService {
                 request.levelRequirement(),
                 request.starForce(),
                 clean(request.statLines()),
+                clean(request.flameStats()),
                 clean(request.potentialTier()),
                 clean(request.potentialLines()),
                 clean(request.bonusPotentialTier()),
@@ -125,6 +141,14 @@ public class EquipmentService {
         }
 
         return repository.findAllByCharacterProfileIdOrderByUpdatedAtDesc(characterProfileId);
+    }
+
+    public Flux<EquipmentCatalogItem> findCatalog(EquipmentSlot slot) {
+        if (slot == null) {
+            return catalogRepository.findAllByOrderBySlotAscLevelRequirementAscNameAsc();
+        }
+
+        return catalogRepository.findAllBySlotOrderByLevelRequirementAscNameAsc(slot);
     }
 
     public Mono<Void> delete(Long id) {
@@ -225,7 +249,7 @@ public class EquipmentService {
             }
 
             StarCounterOutput parsed = objectMapper.readValue(output, StarCounterOutput.class);
-            Integer starForce = parsed.starForce() == null || parsed.starForce() <= 0 ? null : parsed.starForce();
+            Integer starForce = parsed.starForce() == null || parsed.starForce() < 0 ? null : parsed.starForce();
             String notes = starForce == null
                     ? "Star counter did not find filled stars."
                     : "Star counter detected " + starForce + " filled stars.";
@@ -238,6 +262,61 @@ public class EquipmentService {
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             return new StarForceResult(null, "STARFORCE_INTERRUPTED", "Star counter was interrupted.");
+        } finally {
+            if (inputFile != null) {
+                try {
+                    Files.deleteIfExists(inputFile);
+                } catch (IOException ignored) {
+                    // Temporary files are best-effort cleanup.
+                }
+            }
+            if (outputFile != null) {
+                try {
+                    Files.deleteIfExists(outputFile);
+                } catch (IOException ignored) {
+                    // Temporary files are best-effort cleanup.
+                }
+            }
+        }
+    }
+
+    private FlameExtractionResult extractFlameStats(byte[] imageBytes, String suffix) {
+        Path inputFile = null;
+        Path outputFile = null;
+        try {
+            inputFile = Files.createTempFile("maplehelper-flames-", suffix);
+            outputFile = Files.createTempFile("maplehelper-flames-output-", ".json");
+            Files.write(inputFile, imageBytes);
+
+            Process process = new ProcessBuilder(pythonCommand, flameExtractorScript, inputFile.toString(), tesseractCommand)
+                    .redirectErrorStream(true)
+                    .redirectOutput(outputFile.toFile())
+                    .start();
+
+            if (!process.waitFor(OCR_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+                return new FlameExtractionResult("", "FLAMES_TIMED_OUT", "Flame extractor timed out.");
+            }
+
+            String output = Files.readString(outputFile, StandardCharsets.UTF_8).trim();
+            if (process.exitValue() != 0) {
+                return new FlameExtractionResult("", "FLAMES_FAILED", "Flame extractor failed: " + output);
+            }
+
+            FlameExtractorOutput parsed = objectMapper.readValue(output, FlameExtractorOutput.class);
+            String flameStats = parsed.flameStats() == null ? "" : parsed.flameStats().trim();
+            String notes = flameStats.isBlank()
+                    ? "Flame extractor did not find green stat components."
+                    : "Flame extractor found " + parsed.lines() + " green stat line(s).";
+            return new FlameExtractionResult(flameStats, "FLAMES_COMPLETED", notes);
+        } catch (IOException exception) {
+            return new FlameExtractionResult(
+                    "",
+                    "FLAMES_UNAVAILABLE",
+                    "Flame extractor unavailable. Ensure Python, Pillow, NumPy, Tesseract, and maplehelper.cv.flame-extractor-script are configured.");
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            return new FlameExtractionResult("", "FLAMES_INTERRUPTED", "Flame extractor was interrupted.");
         } finally {
             if (inputFile != null) {
                 try {
@@ -286,15 +365,31 @@ public class EquipmentService {
         return value.trim();
     }
 
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+
+        return "";
+    }
+
     private record OcrResult(String text, String status, String notes) {
     }
 
     private record StarForceResult(Integer starForce, String status, String notes) {
     }
 
-    private record ImageExtractionResult(OcrResult ocr, Integer starForce, String status, String notes) {
+    private record FlameExtractionResult(String flameStats, String status, String notes) {
+    }
+
+    private record ImageExtractionResult(OcrResult ocr, Integer starForce, String flameStats, String status, String notes) {
     }
 
     private record StarCounterOutput(Integer starForce, Double confidence, Integer candidates, Integer components, String error) {
+    }
+
+    private record FlameExtractorOutput(String flameStats, Integer lines, String error) {
     }
 }

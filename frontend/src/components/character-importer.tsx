@@ -41,6 +41,7 @@ type EquipmentDraft = {
   levelRequirement: number | null;
   starForce: number | null;
   statLines: string;
+  flameStats: string;
   potentialTier: string;
   potentialLines: string;
   bonusPotentialTier: string;
@@ -255,6 +256,7 @@ export function CharacterImporter() {
           levelRequirement: equipmentDraft.levelRequirement,
           starForce: equipmentDraft.starForce,
           statLines: equipmentDraft.statLines,
+          flameStats: equipmentDraft.flameStats,
           potentialTier: equipmentDraft.potentialTier,
           potentialLines: equipmentDraft.potentialLines,
           bonusPotentialTier: equipmentDraft.bonusPotentialTier,
@@ -408,7 +410,7 @@ export function CharacterImporter() {
               <input type="number" min={0} max={25} value={equipmentDraft.starForce ?? ""} onChange={(event) => updateDraft("starForce", nullableNumber(event.target.value))} />
             </label>
 
-            <label>Stat lines<textarea value={equipmentDraft.statLines} onChange={(event) => updateDraft("statLines", event.target.value)} /></label>
+            <label>Flame stats<textarea value={equipmentDraft.flameStats} onChange={(event) => updateDraft("flameStats", event.target.value)} /></label>
             <label>Potential tier<input value={equipmentDraft.potentialTier} onChange={(event) => updateDraft("potentialTier", event.target.value)} /></label>
             <label>Potential lines<textarea value={equipmentDraft.potentialLines} onChange={(event) => updateDraft("potentialLines", event.target.value)} /></label>
             <label>Bonus potential tier<input value={equipmentDraft.bonusPotentialTier} onChange={(event) => updateDraft("bonusPotentialTier", event.target.value)} /></label>
