@@ -3,7 +3,9 @@ package app.maplehelper.equipment;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 
 @Component
 public class EquipmentFlameCalculator {
@@ -13,14 +15,17 @@ public class EquipmentFlameCalculator {
     private final CatalogEquipmentFactsProvider factsProvider;
     private final EquipmentStatLineParser statLineParser;
     private final StarForceCalculator starForceCalculator;
+    private final FlameLineSolver flameLineSolver;
 
     public EquipmentFlameCalculator(
             CatalogEquipmentFactsProvider factsProvider,
             EquipmentStatLineParser statLineParser,
-            StarForceCalculator starForceCalculator) {
+            StarForceCalculator starForceCalculator,
+            FlameLineSolver flameLineSolver) {
         this.factsProvider = factsProvider;
         this.statLineParser = statLineParser;
         this.starForceCalculator = starForceCalculator;
+        this.flameLineSolver = flameLineSolver;
     }
 
     public String deriveFlameStats(ParsedEquipmentText parsed) {
@@ -29,13 +34,27 @@ public class EquipmentFlameCalculator {
         }
 
         return factsProvider.findBest(parsed.name(), parsed.slot(), parsed.levelRequirement())
-                .map(facts -> deriveFlameStats(parsed, facts))
+                .map(facts -> formatDisplayedFlames(displayedFlames(parsed, facts)))
                 .orElse("");
     }
 
-    private String deriveFlameStats(ParsedEquipmentText parsed, CatalogEquipmentFacts facts) {
-        List<String> flameLines = new ArrayList<>();
+    public String deriveFlameScoreLines(ParsedEquipmentText parsed) {
+        if (parsed.starForce() == null) {
+            return "";
+        }
+
+        return factsProvider.findBest(parsed.name(), parsed.slot(), parsed.levelRequirement())
+                .map(facts -> flameLineSolver.solve(facts, displayedFlames(parsed, facts)))
+                .orElse("");
+    }
+
+    private Map<EquipmentStat, Integer> displayedFlames(ParsedEquipmentText parsed, CatalogEquipmentFacts facts) {
+        Map<EquipmentStat, Integer> displayedFlames = new EnumMap<>(EquipmentStat.class);
         for (ParsedEquipmentStatLine statLine : statLineParser.parse(parsed.statLines())) {
+            if (statLine.stat() == EquipmentStat.DEFENSE) {
+                continue;
+            }
+
             int base = facts.baseStats().getOrDefault(statLine.stat(), 0);
             int starForce = starForceCalculator.contribution(facts, statLine.stat(), parsed.starForce());
             int flame = statLine.total() - base - starForce;
@@ -44,8 +63,18 @@ public class EquipmentFlameCalculator {
             }
 
             if (flame > 0) {
-                flameLines.add(statLine.stat().label() + ": +" + flame + (statLine.percent() ? "%" : ""));
+                displayedFlames.put(statLine.stat(), flame);
             }
+        }
+
+        return displayedFlames;
+    }
+
+    private String formatDisplayedFlames(Map<EquipmentStat, Integer> displayedFlames) {
+        List<String> flameLines = new ArrayList<>();
+        for (Map.Entry<EquipmentStat, Integer> entry : displayedFlames.entrySet()) {
+            String suffix = entry.getKey() == EquipmentStat.ALL_STATS ? "%" : "";
+            flameLines.add(entry.getKey().label() + ": +" + entry.getValue() + suffix);
         }
 
         return String.join(System.lineSeparator(), flameLines);

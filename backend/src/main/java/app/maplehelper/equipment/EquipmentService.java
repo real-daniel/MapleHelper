@@ -30,6 +30,7 @@ public class EquipmentService {
     private final String pythonCommand;
     private final String starCounterScript;
     private final String flameExtractorScript;
+    private final String equipmentOcrPreprocessorScript;
     private final ObjectMapper objectMapper;
     private final EquipmentTextParser textParser;
     private final EquipmentFlameCalculator flameCalculator;
@@ -41,6 +42,7 @@ public class EquipmentService {
             @Value("${maplehelper.cv.python-command:python}") String pythonCommand,
             @Value("${maplehelper.cv.star-counter-script:scripts/count_starforce.py}") String starCounterScript,
             @Value("${maplehelper.cv.flame-extractor-script:scripts/extract_flame_stats.py}") String flameExtractorScript,
+            @Value("${maplehelper.cv.equipment-ocr-preprocessor-script:scripts/preprocess_equipment_ocr.py}") String equipmentOcrPreprocessorScript,
             ObjectMapper objectMapper,
             EquipmentTextParser textParser,
             EquipmentFlameCalculator flameCalculator) {
@@ -50,6 +52,7 @@ public class EquipmentService {
         this.pythonCommand = pythonCommand;
         this.starCounterScript = starCounterScript;
         this.flameExtractorScript = flameExtractorScript;
+        this.equipmentOcrPreprocessorScript = equipmentOcrPreprocessorScript;
         this.objectMapper = objectMapper;
         this.textParser = textParser;
         this.flameCalculator = flameCalculator;
@@ -82,6 +85,7 @@ public class EquipmentService {
                                             flameCalculator.deriveFlameStats(parsed),
                                             extraction.flameStats(),
                                             parsed.flameStats());
+                                    String flameScoreLines = flameCalculator.deriveFlameScoreLines(parsed);
                                     return new EquipmentExtractionDraft(
                                             file.filename(),
                                             byteCount,
@@ -91,6 +95,7 @@ public class EquipmentService {
                                             parsed.starForce(),
                                             parsed.statLines(),
                                             flameStats,
+                                            flameScoreLines,
                                             parsed.potentialTier(),
                                             parsed.potentialLines(),
                                             parsed.bonusPotentialTier(),
@@ -126,6 +131,7 @@ public class EquipmentService {
                 request.starForce(),
                 clean(request.statLines()),
                 clean(request.flameStats()),
+                clean(request.flameScoreLines()),
                 clean(request.potentialTier()),
                 clean(request.potentialLines()),
                 clean(request.bonusPotentialTier()),
@@ -157,15 +163,20 @@ public class EquipmentService {
 
     private OcrResult runOcr(byte[] imageBytes, String suffix) {
         Path inputFile = null;
+        Path preprocessedFile = null;
         Path outputFile = null;
+        Path errorFile = null;
         try {
             inputFile = Files.createTempFile("maplehelper-equipment-", suffix);
+            preprocessedFile = Files.createTempFile("maplehelper-equipment-ocr-input-", ".png");
             outputFile = Files.createTempFile("maplehelper-equipment-ocr-", ".txt");
+            errorFile = Files.createTempFile("maplehelper-equipment-ocr-errors-", ".txt");
             Files.write(inputFile, imageBytes);
 
-            Process process = new ProcessBuilder(tesseractCommand, inputFile.toString(), "stdout", "--psm", "6")
-                    .redirectErrorStream(true)
+            Path ocrInputFile = preprocessForOcr(inputFile, preprocessedFile) ? preprocessedFile : inputFile;
+            Process process = new ProcessBuilder(tesseractCommand, ocrInputFile.toString(), "stdout", "--psm", "6", "-l", "eng")
                     .redirectOutput(outputFile.toFile())
+                    .redirectError(errorFile.toFile())
                     .start();
 
             if (!process.waitFor(OCR_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
@@ -179,10 +190,11 @@ public class EquipmentService {
             String output = Files.readString(outputFile, StandardCharsets.UTF_8).trim();
 
             if (process.exitValue() != 0) {
+                String errors = Files.readString(errorFile, StandardCharsets.UTF_8).trim();
                 return new OcrResult(
                         "",
                         "OCR_FAILED",
-                        "OCR command failed. Tesseract output: " + output);
+                        "OCR command failed. Tesseract output: " + firstNonBlank(output, errors));
             }
 
             if (output.isBlank()) {
@@ -215,6 +227,13 @@ public class EquipmentService {
                     // Temporary files are best-effort cleanup.
                 }
             }
+            if (preprocessedFile != null) {
+                try {
+                    Files.deleteIfExists(preprocessedFile);
+                } catch (IOException ignored) {
+                    // Temporary files are best-effort cleanup.
+                }
+            }
             if (outputFile != null) {
                 try {
                     Files.deleteIfExists(outputFile);
@@ -222,6 +241,32 @@ public class EquipmentService {
                     // Temporary files are best-effort cleanup.
                 }
             }
+            if (errorFile != null) {
+                try {
+                    Files.deleteIfExists(errorFile);
+                } catch (IOException ignored) {
+                    // Temporary files are best-effort cleanup.
+                }
+            }
+        }
+    }
+
+    private boolean preprocessForOcr(Path inputFile, Path outputFile) {
+        try {
+            Process process = new ProcessBuilder(pythonCommand, equipmentOcrPreprocessorScript, inputFile.toString(), outputFile.toString())
+                    .redirectErrorStream(true)
+                    .start();
+            if (!process.waitFor(OCR_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+                return false;
+            }
+
+            return process.exitValue() == 0 && Files.exists(outputFile) && Files.size(outputFile) > 0;
+        } catch (IOException exception) {
+            return false;
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            return false;
         }
     }
 

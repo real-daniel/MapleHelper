@@ -1,6 +1,18 @@
 ALTER TABLE equipment_catalog_items
     ADD COLUMN base_stats JSONB,
-    ADD COLUMN star_force_profile VARCHAR(40) NOT NULL DEFAULT 'NORMAL';
+    ADD COLUMN star_force_profile VARCHAR(40) NOT NULL DEFAULT 'ARMOR_ACCESSORY';
+
+UPDATE equipment_catalog_items
+SET star_force_profile = 'WEAPON'
+WHERE slot = 'WEAPON';
+
+UPDATE equipment_catalog_items
+SET star_force_profile = 'NONE'
+WHERE slot IN ('SECONDARY', 'EMBLEM', 'POCKET', 'BADGE', 'MEDAL', 'ANDROID', 'HEART', 'TOTEM_1', 'TOTEM_2', 'TOTEM_3');
+
+UPDATE equipment_catalog_items
+SET star_force_profile = 'SUPERIOR'
+WHERE name ILIKE '%Gollux%' OR name ILIKE 'Tyrant %';
 
 UPDATE equipment_catalog_items
 SET base_stats = '{"STR":50,"DEX":50,"INT":0,"LUK":0,"All Stats":0,"Max HP":0,"Attack Power":6,"Magic Attack":0,"Defense":325}'::jsonb

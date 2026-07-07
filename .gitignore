@@ -3,10 +3,10 @@
 .env
 .env.local
 *.iml
+.tools/
 
 backend/target/
 frontend/.next/
 frontend/node_modules/
 frontend/out/
 frontend/npm-debug.log*
-

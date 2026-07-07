@@ -30,6 +30,9 @@ public record ConfirmEquipmentRequest(
         @Size(max = 4000)
         String flameStats,
 
+        @Size(max = 4000)
+        String flameScoreLines,
+
         @Size(max = 30)
         String potentialTier,
 

@@ -11,6 +11,8 @@ public record EquipmentCatalogItem(
         Integer levelRequirement,
         String progressionStage,
         String setName,
+        String familyKey,
+        String variantGroup,
         String jobGroup,
         Boolean namePattern,
         String baseStats,

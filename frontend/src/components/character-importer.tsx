@@ -42,6 +42,7 @@ type EquipmentDraft = {
   starForce: number | null;
   statLines: string;
   flameStats: string;
+  flameScoreLines: string;
   potentialTier: string;
   potentialLines: string;
   bonusPotentialTier: string;
@@ -257,6 +258,7 @@ export function CharacterImporter() {
           starForce: equipmentDraft.starForce,
           statLines: equipmentDraft.statLines,
           flameStats: equipmentDraft.flameStats,
+          flameScoreLines: equipmentDraft.flameScoreLines,
           potentialTier: equipmentDraft.potentialTier,
           potentialLines: equipmentDraft.potentialLines,
           bonusPotentialTier: equipmentDraft.bonusPotentialTier,
@@ -411,6 +413,7 @@ export function CharacterImporter() {
             </label>
 
             <label>Flame stats<textarea value={equipmentDraft.flameStats} onChange={(event) => updateDraft("flameStats", event.target.value)} /></label>
+            <label>Flame score lines<textarea value={equipmentDraft.flameScoreLines} onChange={(event) => updateDraft("flameScoreLines", event.target.value)} /></label>
             <label>Potential tier<input value={equipmentDraft.potentialTier} onChange={(event) => updateDraft("potentialTier", event.target.value)} /></label>
             <label>Potential lines<textarea value={equipmentDraft.potentialLines} onChange={(event) => updateDraft("potentialLines", event.target.value)} /></label>
             <label>Bonus potential tier<input value={equipmentDraft.bonusPotentialTier} onChange={(event) => updateDraft("bonusPotentialTier", event.target.value)} /></label>

@@ -9,7 +9,8 @@ class EquipmentFlameCalculatorTest {
     private final EquipmentFlameCalculator calculator = new EquipmentFlameCalculator(
             new CatalogEquipmentFactsProvider(),
             new EquipmentStatLineParser(),
-            new StarForceCalculator());
+            new StarForceCalculator(),
+            new FlameLineSolver(new BonusStatTables()));
 
     @Test
     void derivesEternalKnightPantsFlamesFromBaseAndStarForceStats() {
@@ -17,7 +18,7 @@ class EquipmentFlameCalculatorTest {
                 EquipmentSlot.BOTTOM,
                 "Eternal Knight Pants",
                 250,
-                22,
+                24,
                 """
                         STR +332 (50 +159 +123)
                         DEX +244 (50 +159 +35)
@@ -30,7 +31,7 @@ class EquipmentFlameCalculatorTest {
                         """);
 
         assertThat(calculator.deriveFlameStats(parsed))
-                .isEqualTo("STR: +123\nDEX: +35\nINT: +28\nAll Stats: +5%");
+                .isEqualTo(String.join(System.lineSeparator(), "STR: +123", "DEX: +35", "INT: +28", "All Stats: +5%"));
     }
 
     @Test
@@ -38,7 +39,7 @@ class EquipmentFlameCalculatorTest {
         ParsedEquipmentText parsed = parsed(
                 EquipmentSlot.FACE,
                 "Sweetwater Tattoo",
-                180,
+                160,
                 22,
                 """
                         STR +187 (5 +131 +51)
@@ -51,7 +52,7 @@ class EquipmentFlameCalculatorTest {
                         """);
 
         assertThat(calculator.deriveFlameStats(parsed))
-                .isEqualTo("STR: +51\nINT: +15\nMagic Attack: +3");
+                .isEqualTo(String.join(System.lineSeparator(), "STR: +51", "INT: +15", "Magic Attack: +3"));
     }
 
     @Test
@@ -64,6 +65,34 @@ class EquipmentFlameCalculatorTest {
                 "Max HP +258 (0 +256)");
 
         assertThat(calculator.deriveFlameStats(parsed)).isBlank();
+    }
+
+    @Test
+    void solvesHiddenFlameLinesFromDisplayedTotals() {
+        ParsedEquipmentText parsed = parsed(
+                EquipmentSlot.PENDANT_1,
+                "Source of Suffering",
+                160,
+                25,
+                """
+                        STR +225 (10 +131 +84)
+                        DEX +171 (10 +131 +30)
+                        INT +141 (10 +131)
+                        LUK +141 (10 +131)
+                        All Stats +6% (0% +6%)
+                        Attack Power +158 (3 +155)
+                        Magic ATT +158 (3 +155)
+                        Speed +5 (0 +5)
+                        """);
+
+        assertThat(calculator.deriveFlameStats(parsed))
+                .isEqualTo(String.join(System.lineSeparator(), "STR: +84", "DEX: +30", "All Stats: +6%", "Speed: +5"));
+        assertThat(calculator.deriveFlameScoreLines(parsed))
+                .isEqualTo(String.join(System.lineSeparator(),
+                        "All Stats: +6% (Tier 6)",
+                        "STR: +54 (Tier 6)",
+                        "STR & DEX: +30 (Tier 6)",
+                        "Speed: +5 (Tier 5)"));
     }
 
     private ParsedEquipmentText parsed(
