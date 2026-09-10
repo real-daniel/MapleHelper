@@ -16,16 +16,19 @@ import json
 import re
 import subprocess
 import sys
+import tempfile
 from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
 
 STAT_ALIASES = {
     "STR": "STR",
     "DEX": "DEX",
+    "BEX": "DEX",
+    "BOEX": "DEX",
     "INT": "INT",
     "LUK": "LUK",
     "ALSTATS": "All Stats",
@@ -42,12 +45,16 @@ STAT_ALIASES = {
     "ATTACKPOWER": "Attack Power",
     "MAGICATT": "Magic Attack",
     "MAGICATTACK": "Magic Attack",
+    "BOSSDAMAGE": "Boss Damage",
+    "DAMAGE": "Damage",
     "DEFENSE": "Defense",
     "SPEED": "Speed",
     "JUMP": "Jump",
 }
 
 VALUE_RE = re.compile(r"[+\-]?\d{1,5}%?")
+STAR_BAND_HEIGHT = 45
+OCR_SCALE = 3
 
 
 def main() -> int:
@@ -68,7 +75,7 @@ def main() -> int:
 
 def extract_flame_stats(image_path: Path, tesseract_command: str) -> dict[str, object]:
     image = Image.open(image_path).convert("RGB")
-    words = tesseract_words(image_path, tesseract_command)
+    words = tesseract_words(image, tesseract_command)
 
     extracted: list[str] = []
     for line in grouped_lines(words):
@@ -96,10 +103,19 @@ def extract_flame_stats(image_path: Path, tesseract_command: str) -> dict[str, o
     return {"flameStats": "\n".join(dedupe(extracted)), "lines": len(extracted)}
 
 
-def tesseract_words(image_path: Path, tesseract_command: str) -> list[dict[str, object]]:
-    command = [tesseract_command, str(image_path), "stdout", "--psm", "6", "tsv"]
-    completed = subprocess.run(command, check=True, capture_output=True, text=True)
-    rows = csv.DictReader(completed.stdout.splitlines(), delimiter="\t")
+def tesseract_words(image: Image.Image, tesseract_command: str) -> list[dict[str, object]]:
+    ocr_image = preprocess_for_ocr(image)
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temp_file:
+        temp_path = Path(temp_file.name)
+
+    try:
+        ocr_image.save(temp_path)
+        command = [tesseract_command, str(temp_path), "stdout", "--psm", "6", "tsv"]
+        completed = subprocess.run(command, check=True, capture_output=True, text=True)
+    finally:
+        temp_path.unlink(missing_ok=True)
+
+    rows = csv.DictReader(completed.stdout.splitlines(), delimiter="\t", quoting=csv.QUOTE_NONE)
     words: list[dict[str, object]] = []
     for row in rows:
         text = row.get("text", "").strip()
@@ -111,16 +127,43 @@ def tesseract_words(image_path: Path, tesseract_command: str) -> list[dict[str, 
                 {
                     "key": (row["block_num"], row["par_num"], row["line_num"]),
                     "text": text,
-                    "left": int(row["left"]),
-                    "top": int(row["top"]),
-                    "width": int(row["width"]),
-                    "height": int(row["height"]),
+                    "left": round(int(row["left"]) / OCR_SCALE),
+                    "top": round(int(row["top"]) / OCR_SCALE),
+                    "width": max(1, round(int(row["width"]) / OCR_SCALE)),
+                    "height": max(1, round(int(row["height"]) / OCR_SCALE)),
                 }
             )
         except (KeyError, ValueError):
             continue
 
     return words
+
+
+def preprocess_for_ocr(image: Image.Image) -> Image.Image:
+    width, height = image.size
+    tooltip_width = min(width, 330)
+    cropped = image.crop((0, 0, tooltip_width, height))
+    mask_star_band(cropped)
+
+    upscaled = cropped.resize((cropped.width * OCR_SCALE, cropped.height * OCR_SCALE), Image.Resampling.LANCZOS)
+    gray = ImageOps.grayscale(upscaled)
+    gray = ImageOps.autocontrast(gray, cutoff=1)
+    gray = ImageEnhance.Contrast(gray).enhance(1.8)
+    return gray.filter(ImageFilter.SHARPEN)
+
+
+def mask_star_band(image: Image.Image) -> None:
+    if image.height < STAR_BAND_HEIGHT + 20:
+        return
+
+    pixels = image.load()
+    for y in range(min(STAR_BAND_HEIGHT, image.height)):
+        for x in range(image.width):
+            red, green, blue = pixels[x, y]
+            is_star_pixel = red >= 170 and green >= 145 and blue <= 90
+            is_sparkle_pixel = red >= 180 and green >= 170 and blue >= 120
+            if is_star_pixel or is_sparkle_pixel:
+                pixels[x, y] = (35, 48, 58)
 
 
 def grouped_lines(words: list[dict[str, object]]) -> list[dict[str, object]]:
@@ -131,10 +174,22 @@ def grouped_lines(words: list[dict[str, object]]) -> list[dict[str, object]]:
     lines: list[dict[str, object]] = []
     for group_words in groups.values():
         ordered = sorted(group_words, key=lambda word: word["left"])
+        line_top = median_int([int(word["top"]) for word in ordered])
+        line_bottom = median_int([int(word["top"]) + int(word["height"]) for word in ordered])
+        row_words = [
+            word for word in ordered
+            if abs(int(word["top"]) - line_top) <= 6
+            or abs((int(word["top"]) + int(word["height"])) - line_bottom) <= 6
+        ]
+        if row_words:
+            ordered_for_box = row_words
+        else:
+            ordered_for_box = ordered
+
         left = min(word["left"] for word in ordered)
-        top = min(word["top"] for word in ordered)
+        top = min(word["top"] for word in ordered_for_box)
         right = max(word["left"] + word["width"] for word in ordered)
-        bottom = max(word["top"] + word["height"] for word in ordered)
+        bottom = max(word["top"] + word["height"] for word in ordered_for_box)
         lines.append(
             {
                 "text": " ".join(str(word["text"]) for word in ordered),
@@ -144,6 +199,11 @@ def grouped_lines(words: list[dict[str, object]]) -> list[dict[str, object]]:
         )
 
     return sorted(lines, key=lambda line: line["top"])
+
+
+def median_int(values: list[int]) -> int:
+    ordered = sorted(values)
+    return ordered[len(ordered) // 2]
 
 
 def stat_name(line: str) -> str | None:

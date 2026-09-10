@@ -17,6 +17,9 @@ from pathlib import Path
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
 
+STAR_BAND_HEIGHT = 45
+
+
 def main() -> int:
     if len(sys.argv) != 3:
         print("usage: preprocess_equipment_ocr.py <input-image> <output-image>", file=sys.stderr)
@@ -40,6 +43,7 @@ def preprocess(input_path: Path, output_path: Path) -> None:
     width, height = image.size
     tooltip_width = min(width, 330)
     cropped = image.crop((0, 0, tooltip_width, height))
+    mask_star_band(cropped)
 
     scale = 3
     upscaled = cropped.resize((cropped.width * scale, cropped.height * scale), Image.Resampling.LANCZOS)
@@ -50,6 +54,26 @@ def preprocess(input_path: Path, output_path: Path) -> None:
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     gray.save(output_path)
+
+
+def mask_star_band(image: Image.Image) -> None:
+    """Remove bright Star Force graphics before OCR.
+
+    Stars are already counted by the dedicated CV script. Leaving them visible
+    causes Tesseract to hallucinate punctuation and random characters before the
+    item name.
+    """
+    if image.height < STAR_BAND_HEIGHT + 20:
+        return
+
+    pixels = image.load()
+    for y in range(min(STAR_BAND_HEIGHT, image.height)):
+        for x in range(image.width):
+            red, green, blue = pixels[x, y]
+            is_star_pixel = red >= 170 and green >= 145 and blue <= 90
+            is_sparkle_pixel = red >= 180 and green >= 170 and blue >= 120
+            if is_star_pixel or is_sparkle_pixel:
+                pixels[x, y] = (35, 48, 58)
 
 
 if __name__ == "__main__":

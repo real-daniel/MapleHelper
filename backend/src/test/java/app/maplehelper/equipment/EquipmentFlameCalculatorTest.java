@@ -70,7 +70,7 @@ class EquipmentFlameCalculatorTest {
     @Test
     void solvesHiddenFlameLinesFromDisplayedTotals() {
         ParsedEquipmentText parsed = parsed(
-                EquipmentSlot.PENDANT_1,
+                EquipmentSlot.PENDANT,
                 "Source of Suffering",
                 160,
                 25,
@@ -95,6 +95,69 @@ class EquipmentFlameCalculatorTest {
                         "Speed: +5 (Tier 5)"));
     }
 
+    @Test
+    void derivesEternalGloveFlamesWithoutTreatingStarForceAttackAsFlame() {
+        ParsedEquipmentText parsed = parsed(
+                EquipmentSlot.GLOVES,
+                "Eternal Knight Gloves",
+                250,
+                22,
+                """
+                        STR +332 (65 +159 +118)
+                        DEX +214 (655 +159)
+                        INT +35 (0 +35)
+                        LUK +35 (0 +35)
+                        All Stats +5% (0% +5%)
+                        Attack Power +139 (12 +127)
+                        Magic Attack +120 (0 +120)
+                        Defense +970 (325 +645)
+                        """);
+
+        assertThat(calculator.deriveFlameStats(parsed))
+                .isEqualTo(String.join(
+                        System.lineSeparator(),
+                        "STR: +118",
+                        "INT: +35",
+                        "LUK: +35",
+                        "All Stats: +5%"));
+    }
+
+    @Test
+    void solvesWeaponAttackAndBossFlameTiers() {
+        ParsedEquipmentText parsed = new ParsedEquipmentText(
+                EquipmentSlot.WEAPON,
+                "Destiny Bladecaster",
+                250,
+                0,
+                """
+                        Attack Power +902 (373 +261 +268)
+                        Boss Damage +40% (30% +10%)
+                        """,
+                """
+                        LUK: +72
+                        All Stats: +5%
+                        Attack Power: +268
+                        Boss Damage: +10%
+                        """,
+                "",
+                "",
+                "",
+                "");
+
+        assertThat(normalizeNewlines(calculator.deriveFlameStats(parsed)))
+                .isEqualTo(String.join(System.lineSeparator(),
+                        "LUK: +72",
+                        "All Stats: +5%",
+                        "Attack Power: +268",
+                        "Boss Damage: +10%"));
+        assertThat(calculator.deriveFlameScoreLines(parsed))
+                .isEqualTo(String.join(System.lineSeparator(),
+                        "All Stats: +5% (Tier 5)",
+                        "LUK: +72 (Tier 6)",
+                        "Attack Power: +268 (Tier 7)",
+                        "Boss Damage: +10% (Tier 5)"));
+    }
+
     private ParsedEquipmentText parsed(
             EquipmentSlot slot,
             String name,
@@ -112,5 +175,9 @@ class EquipmentFlameCalculatorTest {
                 "",
                 "",
                 "");
+    }
+
+    private String normalizeNewlines(String value) {
+        return value.replace("\r\n", "\n").replace("\n", System.lineSeparator());
     }
 }

@@ -16,7 +16,12 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
+import java.util.stream.Collectors;
 
 @Service
 public class EquipmentService {
@@ -81,25 +86,34 @@ public class EquipmentService {
                                 .subscribeOn(Schedulers.boundedElastic())
                                 .map(extraction -> {
                                     ParsedEquipmentText parsed = textParser.parse(extraction.ocr().text(), extraction.starForce());
-                                    String flameStats = firstNonBlank(
-                                            flameCalculator.deriveFlameStats(parsed),
-                                            extraction.flameStats(),
-                                            parsed.flameStats());
-                                    String flameScoreLines = flameCalculator.deriveFlameScoreLines(parsed);
+                                    boolean skipFlames = extraction.flameSearchSkipped()
+                                            || SkillRingDetector.isSkillRing(parsed.name())
+                                            || SkillRingDetector.isSkillRingText(extraction.ocr().text())
+                                            || isSweetwaterItem(parsed.name());
+                                    boolean skipPotential = extraction.potentialSkipped()
+                                            || SkillRingDetector.isSkillRing(parsed.name())
+                                            || SkillRingDetector.isSkillRingText(extraction.ocr().text())
+                                            || parsed.slot() == EquipmentSlot.POCKET;
+                                    String flameStats = skipFlames ? "" : preferredFlameStats(parsed, extraction.flameStats());
+                                    ParsedEquipmentText flameParsed = withFlameStats(parsed, flameStats);
+                                    String flameScoreLines = skipFlames
+                                            ? ""
+                                            : flameCalculator.deriveFlameScoreLines(flameParsed);
                                     return new EquipmentExtractionDraft(
                                             file.filename(),
                                             byteCount,
                                             parsed.slot(),
+                                            null,
                                             parsed.name(),
                                             parsed.levelRequirement(),
-                                            parsed.starForce(),
+                                            extraction.starSearchSkipped() ? 0 : parsed.starForce(),
                                             parsed.statLines(),
                                             flameStats,
                                             flameScoreLines,
-                                            parsed.potentialTier(),
-                                            parsed.potentialLines(),
-                                            parsed.bonusPotentialTier(),
-                                            parsed.bonusPotentialLines(),
+                                            skipPotential ? "" : parsed.potentialTier(),
+                                            skipPotential ? "" : parsed.potentialLines(),
+                                            skipPotential ? "" : parsed.bonusPotentialTier(),
+                                            skipPotential ? "" : parsed.bonusPotentialLines(),
                                             extraction.ocr().text(),
                                             extraction.status(),
                                             extraction.notes());
@@ -113,32 +127,151 @@ public class EquipmentService {
 
     private ImageExtractionResult extractImageData(byte[] imageBytes, String suffix) {
         OcrResult ocr = runOcr(imageBytes, suffix);
+        ParsedEquipmentText ocrParsed = textParser.parse(ocr.text(), null);
+        if (SkillRingDetector.isSkillRing(ocrParsed.name()) || SkillRingDetector.isSkillRingText(ocr.text())) {
+            String status = ocr.status() + "+STARFORCE_SKIPPED+FLAMES_SKIPPED+POTENTIAL_SKIPPED";
+            String notes = ocr.notes() + " Detected a skill/Oz ring, so star, flame, and potential extraction were skipped.";
+            return new ImageExtractionResult(ocr, 0, "", status, notes, true, true, true);
+        }
+
+        if (ocrParsed.slot() == EquipmentSlot.POCKET) {
+            FlameExtractionResult flameStats = extractFlameStats(imageBytes, suffix);
+            String status = ocr.status() + "+STARFORCE_SKIPPED+" + flameStats.status() + "+POTENTIAL_SKIPPED";
+            String notes = ocr.notes() + " Detected a pocket item, so star and potential extraction were skipped. " + flameStats.notes();
+            return new ImageExtractionResult(ocr, 0, flameStats.flameStats(), status, notes, true, false, true);
+        }
+
         StarForceResult starForce = countStarForce(imageBytes, suffix);
+        if (isSweetwaterItem(ocrParsed.name())) {
+            String status = ocr.status() + "+" + starForce.status() + "+FLAMES_SKIPPED";
+            String notes = ocr.notes() + " " + starForce.notes() + " Detected a Sweetwater item, so flame extraction was skipped.";
+            return new ImageExtractionResult(ocr, starForce.starForce(), "", status, notes, false, true, false);
+        }
+
         FlameExtractionResult flameStats = extractFlameStats(imageBytes, suffix);
         String status = ocr.status() + "+" + starForce.status() + "+" + flameStats.status();
         String notes = ocr.notes() + " " + starForce.notes() + " " + flameStats.notes();
-        return new ImageExtractionResult(ocr, starForce.starForce(), flameStats.flameStats(), status, notes);
+        return new ImageExtractionResult(ocr, starForce.starForce(), flameStats.flameStats(), status, notes, false, false, false);
+    }
+
+    String preferredFlameStats(ParsedEquipmentText parsed, String extractedFlameStats) {
+        if (parsed.slot() == EquipmentSlot.WEAPON) {
+            return firstNonBlank(
+                    extractedFlameStats,
+                    flameCalculator.deriveFlameStats(parsed),
+                    parsed.flameStats());
+        }
+
+        return firstNonBlank(
+                flameCalculator.deriveFlameStats(parsed),
+                extractedFlameStats,
+                parsed.flameStats());
+    }
+
+    private ParsedEquipmentText withFlameStats(ParsedEquipmentText parsed, String flameStats) {
+        return new ParsedEquipmentText(
+                parsed.slot(),
+                parsed.name(),
+                parsed.levelRequirement(),
+                parsed.starForce(),
+                parsed.statLines(),
+                flameStats,
+                parsed.potentialTier(),
+                parsed.potentialLines(),
+                parsed.bonusPotentialTier(),
+                parsed.bonusPotentialLines());
+    }
+
+    static boolean isSweetwaterItem(String name) {
+        return name != null && name.toLowerCase(java.util.Locale.ROOT).contains("sweetwater");
     }
 
     public Mono<EquipmentItem> confirm(ConfirmEquipmentRequest request) {
         Instant now = Instant.now();
-        return repository.save(new EquipmentItem(
-                null,
-                request.characterProfileId(),
-                request.slot(),
-                request.name().trim(),
-                request.levelRequirement(),
-                request.starForce(),
-                clean(request.statLines()),
-                clean(request.flameStats()),
-                clean(request.flameScoreLines()),
-                clean(request.potentialTier()),
-                clean(request.potentialLines()),
-                clean(request.bonusPotentialTier()),
-                clean(request.bonusPotentialLines()),
-                clean(request.rawExtractedText()),
-                now,
-                now));
+        return resolveSaveSlot(request)
+                .flatMap(resolvedSlot -> deleteExistingSlot(request.characterProfileId(), resolvedSlot.slot(), resolvedSlot.slotIndex())
+                        .then(repository.save(new EquipmentItem(
+                                null,
+                                request.characterProfileId(),
+                                resolvedSlot.slot(),
+                                resolvedSlot.slotIndex(),
+                                request.name().trim(),
+                                request.levelRequirement(),
+                                request.starForce(),
+                                clean(request.statLines()),
+                                clean(request.flameStats()),
+                                clean(request.flameScoreLines()),
+                                clean(request.potentialTier()),
+                                clean(request.potentialLines()),
+                                clean(request.bonusPotentialTier()),
+                                clean(request.bonusPotentialLines()),
+                                clean(request.rawExtractedText()),
+                                now,
+                                now))));
+    }
+
+    private Mono<Void> deleteExistingSlot(Long characterProfileId, EquipmentSlot slot, Integer slotIndex) {
+        if (characterProfileId == null) {
+            return Mono.empty();
+        }
+
+        return repository.findAllByCharacterProfileIdOrderByUpdatedAtDesc(characterProfileId)
+                .filter(existing -> existing.slot() == slot && Objects.equals(existing.slotIndex(), slotIndex))
+                .flatMap(existing -> repository.deleteById(existing.id()))
+                .then();
+    }
+
+    private Mono<ResolvedSlot> resolveSaveSlot(ConfirmEquipmentRequest request) {
+        if (request.characterProfileId() == null) {
+            return Mono.just(new ResolvedSlot(request.slot(), normalizeSlotIndex(request.slot(), request.slotIndex())));
+        }
+
+        int capacity = slotCapacity(request.slot());
+        if (capacity <= 1) {
+            return Mono.just(new ResolvedSlot(request.slot(), null));
+        }
+
+        return repository.findAllByCharacterProfileIdOrderByUpdatedAtDesc(request.characterProfileId())
+                .filter(existing -> existing.slot() == request.slot())
+                .map(EquipmentItem::slotIndex)
+                .filter(index -> index != null && index >= 1 && index <= capacity)
+                .collect(Collectors.toSet())
+                .map(occupiedIndexes -> new ResolvedSlot(
+                        request.slot(),
+                        firstEmptySlotIndex(capacity, occupiedIndexes)
+                                .orElse(normalizeSlotIndex(request.slot(), request.slotIndex()))));
+    }
+
+    private Optional<Integer> firstEmptySlotIndex(int capacity, Set<Integer> occupiedIndexes) {
+        return IntStream.rangeClosed(1, capacity)
+                .boxed()
+                .filter(index -> !occupiedIndexes.contains(index))
+                .findFirst();
+    }
+
+    private Integer normalizeSlotIndex(EquipmentSlot slot, Integer requestedIndex) {
+        int capacity = slotCapacity(slot);
+        if (capacity <= 1) {
+            return null;
+        }
+
+        if (requestedIndex == null || requestedIndex < 1 || requestedIndex > capacity) {
+            return 1;
+        }
+
+        return requestedIndex;
+    }
+
+    private int slotCapacity(EquipmentSlot slot) {
+        return switch (slot) {
+            case RING -> 4;
+            case PENDANT -> 2;
+            case TOTEM -> 3;
+            default -> 1;
+        };
+    }
+
+    private record ResolvedSlot(EquipmentSlot slot, Integer slotIndex) {
     }
 
     public Flux<EquipmentItem> findAll(Long characterProfileId) {
@@ -429,7 +562,15 @@ public class EquipmentService {
     private record FlameExtractionResult(String flameStats, String status, String notes) {
     }
 
-    private record ImageExtractionResult(OcrResult ocr, Integer starForce, String flameStats, String status, String notes) {
+    private record ImageExtractionResult(
+            OcrResult ocr,
+            Integer starForce,
+            String flameStats,
+            String status,
+            String notes,
+            boolean starSearchSkipped,
+            boolean flameSearchSkipped,
+            boolean potentialSkipped) {
     }
 
     private record StarCounterOutput(Integer starForce, Double confidence, Integer candidates, Integer components, String error) {

@@ -33,6 +33,10 @@ public class EquipmentFlameCalculator {
             return "";
         }
 
+        if (parsed.slot() == EquipmentSlot.WEAPON && parsed.flameStats() != null && !parsed.flameStats().isBlank()) {
+            return parsed.flameStats().trim();
+        }
+
         return factsProvider.findBest(parsed.name(), parsed.slot(), parsed.levelRequirement())
                 .map(facts -> formatDisplayedFlames(displayedFlames(parsed, facts)))
                 .orElse("");
@@ -44,8 +48,20 @@ public class EquipmentFlameCalculator {
         }
 
         return factsProvider.findBest(parsed.name(), parsed.slot(), parsed.levelRequirement())
-                .map(facts -> flameLineSolver.solve(facts, displayedFlames(parsed, facts)))
+                .map(facts -> flameLineSolver.solve(facts, flameScoreSource(parsed, facts)))
                 .orElse("");
+    }
+
+    private Map<EquipmentStat, Integer> flameScoreSource(ParsedEquipmentText parsed, CatalogEquipmentFacts facts) {
+        if (facts.slot() == EquipmentSlot.WEAPON && parsed.flameStats() != null && !parsed.flameStats().isBlank()) {
+            Map<EquipmentStat, Integer> parsedFlames = new EnumMap<>(EquipmentStat.class);
+            for (ParsedEquipmentStatLine statLine : statLineParser.parse(parsed.flameStats())) {
+                parsedFlames.put(statLine.stat(), statLine.total());
+            }
+            return parsedFlames;
+        }
+
+        return displayedFlames(parsed, facts);
     }
 
     private Map<EquipmentStat, Integer> displayedFlames(ParsedEquipmentText parsed, CatalogEquipmentFacts facts) {
@@ -73,11 +89,17 @@ public class EquipmentFlameCalculator {
     private String formatDisplayedFlames(Map<EquipmentStat, Integer> displayedFlames) {
         List<String> flameLines = new ArrayList<>();
         for (Map.Entry<EquipmentStat, Integer> entry : displayedFlames.entrySet()) {
-            String suffix = entry.getKey() == EquipmentStat.ALL_STATS ? "%" : "";
+            String suffix = isPercentFlame(entry.getKey()) ? "%" : "";
             flameLines.add(entry.getKey().label() + ": +" + entry.getValue() + suffix);
         }
 
         return String.join(System.lineSeparator(), flameLines);
+    }
+
+    private boolean isPercentFlame(EquipmentStat stat) {
+        return stat == EquipmentStat.ALL_STATS
+                || stat == EquipmentStat.BOSS_DAMAGE
+                || stat == EquipmentStat.DAMAGE;
     }
 
     private boolean isDefensiveStat(EquipmentStat stat) {

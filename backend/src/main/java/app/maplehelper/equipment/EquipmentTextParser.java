@@ -12,15 +12,23 @@ import java.util.regex.Pattern;
 @Component
 public class EquipmentTextParser {
 
+    private static final Pattern POSSIBLE_STAT_LINE_PATTERN = Pattern.compile(
+            "^\\s*([A-Za-z0-9 .]{2,28}?)\\s*:?\\s+([+\\-#]\\s*\\d{1,5})\\s*(%?)\\s*(?:\\([^)]*\\))?.*");
     private static final Pattern LEVEL_PATTERN = Pattern.compile("(?i)required\\s*level\\s*lv[\\.,]?\\s*(\\d{1,3})");
     private static final Pattern POTENTIAL_TIER_PATTERN = Pattern.compile("(?i)(bonus\\s+)?potential\\s*:?\\s*(rare|epic|unique|legendary)");
     private static final Pattern STAT_LINE_PATTERN = Pattern.compile(
             "(?i)^(str|dex|int|luk|all\\s*stats?|max\\s*hp|max\\s*mp|attack\\s*power|magic\\s*att|defense|speed|jump|boss\\s*damage|enemy\\s*def\\s*ignored)\\b.*");
     private static final Pattern EQUIPMENT_STAT_COMPONENT_PATTERN = Pattern.compile(
-            "(?i)^(str|dex|int|luk|all\\s*stats?|max\\s*hp|max\\s*mp|attack\\s*power|magic\\s*att|defense|speed|jump)\\b\\s*[:+ ]*([+\\-]?\\s*\\d{1,5}\\s*%?)\\s*\\(([^)]*)\\).*");
+            "(?i)^(str|dex|int|luk|all\\s*stats?|max\\s*hp|max\\s*mp|attack\\s*power|magic\\s*att|defense|speed|jump|boss\\s*damage|damage)\\b\\s*[:+ ]*([+\\-]?\\s*\\d{1,5}\\s*%?)\\s*\\(([^)]*)\\).*");
     private static final Pattern COMPONENT_VALUE_PATTERN = Pattern.compile("([+\\-]?\\s*\\d{1,5}\\s*%?)");
     private static final Pattern POTENTIAL_LINE_PATTERN = Pattern.compile(
             "(?i).*?\\b(str|dex|int|luk|all\\s*stats?|boss\\s*damage|damage|critical\\s*damage|crit(?:ical)?\\s*dmg|attack\\s*power|att(?:ack)?|magic\\s*att(?:ack)?|m\\.\\s*att(?:ack)?|item\\s*drop(?:\\s*rate)?|drop\\s*rate|meso(?:s)?(?:\\s*obtained)?|enemy\\s*def(?:ense)?\\s*ignored|ignore\\s*enemy\\s*def(?:ense)?|ied)\\b\\s*[':;/| ]*([+\\-]?\\s*\\d{1,3}\\s*%?).*");
+
+    private final CatalogEquipmentFactsProvider factsProvider;
+
+    public EquipmentTextParser(CatalogEquipmentFactsProvider factsProvider) {
+        this.factsProvider = factsProvider;
+    }
 
     public ParsedEquipmentText parse(String rawText, Integer starForce) {
         List<String> lines = rawText == null ? List.of() : rawText.lines()
@@ -28,9 +36,15 @@ public class EquipmentTextParser {
                 .filter(line -> !line.isBlank())
                 .toList();
 
-        EquipmentSlot slot = findSlot(lines);
+        EquipmentSlot detectedSlot = findSlot(lines);
         String name = findName(lines);
         Integer levelRequirement = correctLevelRequirement(name, findLevelRequirement(lines));
+        Optional<CatalogEquipmentFacts> catalogMatch = factsProvider.findBest(name, detectedSlot, levelRequirement);
+        EquipmentSlot slot = catalogMatch.map(CatalogEquipmentFacts::slot).orElse(detectedSlot);
+        name = catalogMatch.map(CatalogEquipmentFacts::name).orElse(name);
+        if (levelRequirement == null && catalogMatch.isPresent()) {
+            levelRequirement = catalogMatch.get().levelRequirement();
+        }
 
         List<String> statLines = new ArrayList<>();
         List<String> flameStats = new ArrayList<>();
@@ -57,8 +71,7 @@ public class EquipmentTextParser {
                 continue;
             }
 
-            if (line.toLowerCase(Locale.ROOT).startsWith("exceptional")
-                    || line.toLowerCase(Locale.ROOT).contains("enhancement details")) {
+            if (endsPotentialSection(line)) {
                 inPotential = false;
                 inBonusPotential = false;
             }
@@ -78,9 +91,7 @@ public class EquipmentTextParser {
                 flameStats.add(flameLine.get());
             }
 
-            if (STAT_LINE_PATTERN.matcher(line).matches()) {
-                statLines.add(line);
-            }
+            canonicalizeStatLine(line).ifPresent(statLines::add);
         }
 
         return new ParsedEquipmentText(
@@ -108,6 +119,7 @@ public class EquipmentTextParser {
                 .replaceAll("(?i)^Allstats\\b", "All Stats")
                 .replaceAll("(?i)^Aitack\\s*Power\\b", "Attack Power")
                 .replaceAll("(?i)^AttackPower\\b", "Attack Power")
+                .replaceAll("(?i)^BossDamage\\b", "Boss Damage")
                 .replaceAll("(?i)^STR['/:]?\\s*", "STR ")
                 .replaceAll("(?i)^DEX['/:]?\\s*", "DEX ")
                 .replaceAll("(?i)^INT['/:]?\\s*", "INT ")
@@ -132,19 +144,35 @@ public class EquipmentTextParser {
             if (lower.contains("shoulder")) return EquipmentSlot.SHOULDER;
             if (lower.contains("face")) return EquipmentSlot.FACE;
             if (lower.contains("eye")) return EquipmentSlot.EYE;
-            if (lower.contains("pendant")) return EquipmentSlot.PENDANT_1;
-            if (lower.contains("ring")) return EquipmentSlot.RING_1;
+            if (lower.contains("pendant")) return EquipmentSlot.PENDANT;
+            if (lower.contains("ring")) return EquipmentSlot.RING;
             if (lower.contains("badge")) return EquipmentSlot.BADGE;
             if (lower.contains("medal")) return EquipmentSlot.MEDAL;
             if (lower.contains("heart")) return EquipmentSlot.HEART;
             if (lower.contains("android")) return EquipmentSlot.ANDROID;
             if (lower.contains("pocket")) return EquipmentSlot.POCKET;
+            if (lower.contains("totem")) return EquipmentSlot.TOTEM;
         }
 
-        return EquipmentSlot.WEAPON;
+        return null;
+    }
+
+    private Optional<String> canonicalizeStatLine(String line) {
+        Matcher matcher = POSSIBLE_STAT_LINE_PATTERN.matcher(line);
+        if (!matcher.matches()) {
+            return Optional.empty();
+        }
+
+        return EquipmentStat.fromOcrName(matcher.group(1))
+                .map(stat -> stat.label() + line.substring(matcher.end(1)));
     }
 
     private String findName(List<String> lines) {
+        Optional<String> skillRingName = SkillRingDetector.findSkillRingName(String.join(System.lineSeparator(), lines));
+        if (skillRingName.isPresent()) {
+            return skillRingName.get();
+        }
+
         for (int index = 0; index < lines.size(); index++) {
             String line = lines.get(index);
             if (line.toLowerCase(Locale.ROOT).contains("untradable") && index > 0) {
@@ -173,6 +201,13 @@ public class EquipmentTextParser {
                 || lower.contains("potential")
                 || lower.contains("interact")
                 || lower.contains("enhancement");
+    }
+
+    private boolean endsPotentialSection(String line) {
+        String lower = line.toLowerCase(Locale.ROOT);
+        return lower.startsWith("exceptional")
+                || lower.contains("enhancement details")
+                || lower.contains("soul");
     }
 
     private Integer findLevelRequirement(List<String> lines) {
@@ -276,6 +311,8 @@ public class EquipmentTextParser {
             case "defense" -> "Defense";
             case "speed" -> "Speed";
             case "jump" -> "Jump";
+            case "boss damage" -> "Boss Damage";
+            case "damage" -> "Damage";
             default -> capitalize(normalized);
         };
     }

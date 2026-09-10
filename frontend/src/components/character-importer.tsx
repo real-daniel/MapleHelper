@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { FormEvent, useEffect, useState } from "react";
+import { UpgradeRecommendations } from "@/components/upgrade-recommendations";
 
 type Region = "NORTH_AMERICA" | "EUROPE";
 
@@ -24,19 +25,19 @@ type CharacterProfile = ImportedCharacter & {
 };
 
 type EquipmentSlot =
-  | "RING_1" | "RING_2" | "RING_3" | "RING_4"
-  | "PENDANT_1" | "PENDANT_2"
+  | "RING" | "PENDANT"
   | "WEAPON" | "SECONDARY" | "EMBLEM"
   | "HAT" | "FACE" | "EYE" | "EARRINGS"
   | "TOP" | "BOTTOM" | "SHOES" | "GLOVES" | "CAPE"
   | "BELT" | "SHOULDER" | "POCKET" | "BADGE" | "MEDAL"
   | "ANDROID" | "HEART"
-  | "TOTEM_1" | "TOTEM_2" | "TOTEM_3";
+  | "TOTEM";
 
 type EquipmentDraft = {
   originalFilename: string;
   imageBytes: number;
   slot: EquipmentSlot;
+  slotIndex: number | null;
   name: string;
   levelRequirement: number | null;
   starForce: number | null;
@@ -62,15 +63,20 @@ type EquipmentItem = Omit<EquipmentDraft, "originalFilename" | "imageBytes" | "e
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
 
 const EQUIPMENT_SLOTS: EquipmentSlot[] = [
-  "RING_1", "RING_2", "RING_3", "RING_4",
-  "PENDANT_1", "PENDANT_2",
+  "RING", "PENDANT",
   "WEAPON", "SECONDARY", "EMBLEM",
   "HAT", "FACE", "EYE", "EARRINGS",
   "TOP", "BOTTOM", "SHOES", "GLOVES", "CAPE",
   "BELT", "SHOULDER", "POCKET", "BADGE", "MEDAL",
   "ANDROID", "HEART",
-  "TOTEM_1", "TOTEM_2", "TOTEM_3",
+  "TOTEM",
 ];
+
+const SLOT_CAPACITY: Partial<Record<EquipmentSlot, number>> = {
+  RING: 4,
+  PENDANT: 2,
+  TOTEM: 3,
+};
 
 export function CharacterImporter() {
   const [name, setName] = useState("FangBlade");
@@ -253,6 +259,7 @@ export function CharacterImporter() {
         body: JSON.stringify({
           characterProfileId: selectedProfileId ? Number(selectedProfileId) : null,
           slot: equipmentDraft.slot,
+          slotIndex: equipmentDraft.slotIndex,
           name: equipmentDraft.name,
           levelRequirement: equipmentDraft.levelRequirement,
           starForce: equipmentDraft.starForce,
@@ -295,6 +302,14 @@ export function CharacterImporter() {
 
   function updateDraft<Key extends keyof EquipmentDraft>(key: Key, value: EquipmentDraft[Key]) {
     setEquipmentDraft((current) => current ? { ...current, [key]: value } : current);
+  }
+
+  function updateDraftSlot(slot: EquipmentSlot) {
+    setEquipmentDraft((current) => {
+      if (!current) return current;
+      const capacity = SLOT_CAPACITY[slot] ?? 1;
+      return { ...current, slot, slotIndex: capacity > 1 ? clampSlotIndex(current.slotIndex, capacity) : null };
+    });
   }
 
   return (
@@ -392,10 +407,23 @@ export function CharacterImporter() {
 
             <label>
               Slot
-              <select value={equipmentDraft.slot} onChange={(event) => updateDraft("slot", event.target.value as EquipmentSlot)}>
+              <select value={equipmentDraft.slot} onChange={(event) => updateDraftSlot(event.target.value as EquipmentSlot)}>
                 {EQUIPMENT_SLOTS.map((slot) => <option key={slot} value={slot}>{slot}</option>)}
               </select>
             </label>
+
+            {(SLOT_CAPACITY[equipmentDraft.slot] ?? 1) > 1 && (
+              <label>
+                Preferred slot
+                <select
+                  value={equipmentDraft.slotIndex ?? 1}
+                  onChange={(event) => updateDraft("slotIndex", Number(event.target.value))}
+                >
+                  {Array.from({ length: SLOT_CAPACITY[equipmentDraft.slot] ?? 1 }, (_, index) => index + 1)
+                    .map((slotIndex) => <option key={slotIndex} value={slotIndex}>{slotIndex}</option>)}
+                </select>
+              </label>
+            )}
 
             <label>
               Item name
@@ -441,7 +469,7 @@ export function CharacterImporter() {
             <tbody>
               {equipment.map((item) => (
                 <tr key={item.id}>
-                  <td>{item.slot}</td>
+                  <td>{formatEquipmentSlot(item)}</td>
                   <td>{item.name}</td>
                   <td>{item.starForce ?? "-"}</td>
                   <td>{item.potentialTier || "-"}</td>
@@ -452,6 +480,8 @@ export function CharacterImporter() {
           </table>
         )}
       </section>
+
+      <UpgradeRecommendations equipment={equipment} selectedProfileId={selectedProfileId} />
 
       <section>
         <div className="section-heading">
@@ -491,4 +521,13 @@ async function readBody(response: Response) {
 
 function nullableNumber(value: string) {
   return value === "" ? null : Number(value);
+}
+
+function clampSlotIndex(value: number | null, capacity: number) {
+  if (value == null || value < 1 || value > capacity) return 1;
+  return value;
+}
+
+function formatEquipmentSlot(item: { slot: EquipmentSlot; slotIndex: number | null }) {
+  return item.slotIndex == null ? item.slot : `${item.slot} ${item.slotIndex}`;
 }

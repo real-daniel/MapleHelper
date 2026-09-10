@@ -30,4 +30,5 @@ maplehelper:
     python-command: ${PYTHON_COMMAND:python}
     star-counter-script: ${STAR_COUNTER_SCRIPT:scripts/count_starforce.py}
     flame-extractor-script: ${FLAME_EXTRACTOR_SCRIPT:scripts/extract_flame_stats.py}
+    stat-equivalency-extractor-script: ${STAT_EQUIVALENCY_EXTRACTOR_SCRIPT:scripts/extract_stat_equivalencies.py}
     equipment-ocr-preprocessor-script: ${EQUIPMENT_OCR_PREPROCESSOR_SCRIPT:scripts/preprocess_equipment_ocr.py}

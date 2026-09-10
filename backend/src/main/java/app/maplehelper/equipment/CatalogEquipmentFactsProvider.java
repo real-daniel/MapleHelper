@@ -13,42 +13,42 @@ import java.util.Optional;
 public class CatalogEquipmentFactsProvider {
 
     private static final List<CatalogEquipmentFacts> FACTS = List.of(
-            fact("Kanna's Treasure", EquipmentSlot.RING_1, 140, standard(), allStats(5,
+            fact("Kanna's Treasure", EquipmentSlot.RING, 140, standard(), allStats(5,
                     stat(EquipmentStat.MAX_HP, 200), stat(EquipmentStat.MAX_MP, 200),
                     stat(EquipmentStat.ATTACK_POWER, 1), stat(EquipmentStat.MAGIC_ATTACK, 1),
                     stat(EquipmentStat.DEFENSE, 150))),
-            fact("Meister Ring", EquipmentSlot.RING_1, 140, standard(), allStats(5,
+            fact("Meister Ring", EquipmentSlot.RING, 140, standard(), allStats(5,
                     stat(EquipmentStat.MAX_HP, 200), stat(EquipmentStat.MAX_MP, 200),
                     stat(EquipmentStat.ATTACK_POWER, 1), stat(EquipmentStat.MAGIC_ATTACK, 1),
                     stat(EquipmentStat.DEFENSE, 150))),
-            fact("Guardian Angel Ring", EquipmentSlot.RING_1, 160, standard(), allStats(5,
+            fact("Guardian Angel Ring", EquipmentSlot.RING, 160, standard(), allStats(5,
                     stat(EquipmentStat.MAX_HP, 200), stat(EquipmentStat.MAX_MP, 200),
                     stat(EquipmentStat.ATTACK_POWER, 2), stat(EquipmentStat.MAGIC_ATTACK, 2))),
-            fact("Dawn Guardian Angel Ring", EquipmentSlot.RING_1, 160, standard(), allStats(5,
+            fact("Dawn Guardian Angel Ring", EquipmentSlot.RING, 160, standard(), allStats(5,
                     stat(EquipmentStat.MAX_HP, 200), stat(EquipmentStat.MAX_MP, 200),
                     stat(EquipmentStat.ATTACK_POWER, 2), stat(EquipmentStat.MAGIC_ATTACK, 2))),
-            fact("Endless Terror", EquipmentSlot.RING_1, 200, standard(), allStats(5,
+            fact("Endless Terror", EquipmentSlot.RING, 200, standard(), allStats(5,
                     stat(EquipmentStat.MAX_HP, 250), stat(EquipmentStat.MAX_MP, 250),
                     stat(EquipmentStat.ATTACK_POWER, 4), stat(EquipmentStat.MAGIC_ATTACK, 4))),
-            fact("Whisper of the Source", EquipmentSlot.RING_1, 250, standard(), allStats(10,
+            fact("Whisper of the Source", EquipmentSlot.RING, 250, standard(), allStats(10,
                     stat(EquipmentStat.MAX_HP, 500), stat(EquipmentStat.MAX_MP, 500),
                     stat(EquipmentStat.ATTACK_POWER, 5), stat(EquipmentStat.MAGIC_ATTACK, 5))),
-            fact("Blissful Nightmare", EquipmentSlot.RING_1, 250, standard(), allStats(10,
+            fact("Blissful Nightmare", EquipmentSlot.RING, 250, standard(), allStats(10,
                     stat(EquipmentStat.MAX_HP, 500), stat(EquipmentStat.MAX_MP, 500),
                     stat(EquipmentStat.ATTACK_POWER, 5), stat(EquipmentStat.MAGIC_ATTACK, 5))),
 
-            fact("Dominator Pendant", EquipmentSlot.PENDANT_1, 140, standard(), allStats(20,
+            fact("Dominator Pendant", EquipmentSlot.PENDANT, 140, standard(), allStats(20,
                     stat(EquipmentStat.ATTACK_POWER, 3), stat(EquipmentStat.MAGIC_ATTACK, 3),
                     stat(EquipmentStat.DEFENSE, 100))),
-            fact("Daybreak Pendant", EquipmentSlot.PENDANT_1, 140, standard(), allStats(8,
+            fact("Daybreak Pendant", EquipmentSlot.PENDANT, 140, standard(), allStats(8,
                     stat(EquipmentStat.ATTACK_POWER, 2), stat(EquipmentStat.MAGIC_ATTACK, 2),
                     stat(EquipmentStat.DEFENSE, 100))),
-            fact("Sweetwater Pendant", EquipmentSlot.PENDANT_1, 160, standard(), allStats(34,
+            fact("Sweetwater Pendant", EquipmentSlot.PENDANT, 160, standard(), allStats(34,
                     stat(EquipmentStat.MAX_MP, 342), stat(EquipmentStat.DEFENSE, 330))),
-            fact("Source of Suffering", EquipmentSlot.PENDANT_1, 160, standard(), allStats(10,
+            fact("Source of Suffering", EquipmentSlot.PENDANT, 160, standard(), allStats(10,
                     stat(EquipmentStat.ATTACK_POWER, 3), stat(EquipmentStat.MAGIC_ATTACK, 3),
                     stat(EquipmentStat.DEFENSE, 200))),
-            fact("Oath of Death", EquipmentSlot.PENDANT_1, 250, standard(), allStats(15,
+            fact("Oath of Death", EquipmentSlot.PENDANT, 250, standard(), allStats(15,
                     stat(EquipmentStat.ATTACK_POWER, 5), stat(EquipmentStat.MAGIC_ATTACK, 5),
                     stat(EquipmentStat.DEFENSE, 300))),
 
@@ -93,7 +93,19 @@ public class CatalogEquipmentFactsProvider {
                     stat(EquipmentStat.LUK, 0), stat(EquipmentStat.ALL_STATS, 0),
                     stat(EquipmentStat.ATTACK_POWER, 12), stat(EquipmentStat.MAGIC_ATTACK, 0),
                     stat(EquipmentStat.DEFENSE, 325), stat(EquipmentStat.SPEED, 10),
-                    stat(EquipmentStat.JUMP, 7)))
+                    stat(EquipmentStat.JUMP, 7))),
+            fact("Eternal Knight Gloves", EquipmentSlot.GLOVES, 250, standard(), stats(
+                    stat(EquipmentStat.STR, 55), stat(EquipmentStat.DEX, 55), stat(EquipmentStat.INT, 0),
+                    stat(EquipmentStat.LUK, 0), stat(EquipmentStat.ALL_STATS, 0),
+                    stat(EquipmentStat.ATTACK_POWER, 12), stat(EquipmentStat.MAGIC_ATTACK, 0),
+                    stat(EquipmentStat.DEFENSE, 325))),
+
+            fact("Destiny Bladecaster", EquipmentSlot.WEAPON, 250, StarForceProfile.WEAPON, stats(
+                    stat(EquipmentStat.STR, 190), stat(EquipmentStat.DEX, 190),
+                    stat(EquipmentStat.INT, 0), stat(EquipmentStat.LUK, 0),
+                    stat(EquipmentStat.ALL_STATS, 0), stat(EquipmentStat.ATTACK_POWER, 373),
+                    stat(EquipmentStat.MAGIC_ATTACK, 0), stat(EquipmentStat.BOSS_DAMAGE, 30),
+                    stat(EquipmentStat.ENEMY_DEFENSE_IGNORED, 20)))
     );
 
     public Optional<CatalogEquipmentFacts> findBest(String name, EquipmentSlot slot, Integer levelRequirement) {
@@ -108,7 +120,7 @@ public class CatalogEquipmentFactsProvider {
                         || facts.levelRequirement() == null
                         || Math.abs(facts.levelRequirement() - levelRequirement) <= 10)
                 .map(facts -> new ScoredFacts(facts, score(normalizedName, facts)))
-                .filter(scored -> scored.score() > 0)
+                .filter(scored -> scored.score() >= 45)
                 .max(Comparator.comparingInt(ScoredFacts::score))
                 .map(ScoredFacts::facts);
     }
@@ -118,19 +130,15 @@ public class CatalogEquipmentFactsProvider {
             return true;
         }
 
-        return isRing(factSlot) && isRing(parsedSlot)
-                || isPendant(factSlot) && isPendant(parsedSlot);
+        return false;
     }
 
     private boolean isRing(EquipmentSlot slot) {
-        return slot == EquipmentSlot.RING_1
-                || slot == EquipmentSlot.RING_2
-                || slot == EquipmentSlot.RING_3
-                || slot == EquipmentSlot.RING_4;
+        return slot == EquipmentSlot.RING;
     }
 
     private boolean isPendant(EquipmentSlot slot) {
-        return slot == EquipmentSlot.PENDANT_1 || slot == EquipmentSlot.PENDANT_2;
+        return slot == EquipmentSlot.PENDANT;
     }
 
     private int score(String normalizedName, CatalogEquipmentFacts facts) {
@@ -143,20 +151,39 @@ public class CatalogEquipmentFactsProvider {
             return 80;
         }
 
-        int score = 0;
-        for (String token : normalizedCatalogName.split(" ")) {
-            if (token.length() >= 4 && normalizedName.contains(token)) {
-                score += 10;
-            }
-        }
-
-        return score;
+        String compactName = normalizedName.replace(" ", "");
+        String compactCatalogName = normalizedCatalogName.replace(" ", "");
+        int longestLength = Math.max(compactName.length(), compactCatalogName.length());
+        int distance = editDistance(compactName, compactCatalogName);
+        return longestLength == 0 ? 0 : (int) Math.round(100.0 * (longestLength - distance) / longestLength);
     }
 
     private String normalize(String value) {
         return value.toLowerCase(Locale.ROOT)
                 .replaceAll("[^a-z0-9]+", " ")
                 .trim();
+    }
+
+    private int editDistance(String left, String right) {
+        int[] previous = new int[right.length() + 1];
+        for (int index = 0; index <= right.length(); index++) {
+            previous[index] = index;
+        }
+
+        for (int leftIndex = 1; leftIndex <= left.length(); leftIndex++) {
+            int[] current = new int[right.length() + 1];
+            current[0] = leftIndex;
+            for (int rightIndex = 1; rightIndex <= right.length(); rightIndex++) {
+                int substitution = previous[rightIndex - 1]
+                        + (left.charAt(leftIndex - 1) == right.charAt(rightIndex - 1) ? 0 : 1);
+                current[rightIndex] = Math.min(
+                        Math.min(current[rightIndex - 1] + 1, previous[rightIndex] + 1),
+                        substitution);
+            }
+            previous = current;
+        }
+
+        return previous[right.length()];
     }
 
     private static StarForceProfile standard() {

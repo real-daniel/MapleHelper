@@ -23,7 +23,9 @@ public class FlameLineSolver {
             EquipmentStat.ATTACK_POWER,
             EquipmentStat.MAGIC_ATTACK,
             EquipmentStat.SPEED,
-            EquipmentStat.JUMP
+            EquipmentStat.JUMP,
+            EquipmentStat.BOSS_DAMAGE,
+            EquipmentStat.DAMAGE
     );
 
     private final BonusStatTables bonusStatTables;

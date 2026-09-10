@@ -4,6 +4,7 @@ public record EquipmentExtractionDraft(
         String originalFilename,
         long imageBytes,
         EquipmentSlot slot,
+        Integer slotIndex,
         String name,
         Integer levelRequirement,
         Integer starForce,

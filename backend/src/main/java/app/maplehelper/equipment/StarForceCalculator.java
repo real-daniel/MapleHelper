@@ -81,10 +81,14 @@ public class StarForceCalculator {
         return switch (stat) {
             case STR, DEX, INT, LUK -> isClassRelevantStat(item, stat) ? value.classStat() : 0;
             case MAX_HP, MAX_MP -> receivesHpMpStarForce(item.slot()) ? value.maxHpMp() : 0;
-            case ATTACK_POWER, MAGIC_ATTACK -> value.attack() + (item.slot() == EquipmentSlot.GLOVES ? value.glovesAttack() : 0);
+            case ATTACK_POWER, MAGIC_ATTACK -> value.attack()
+                    + (item.slot() == EquipmentSlot.GLOVES
+                    && item.baseStats().getOrDefault(stat, 0) > 0
+                    ? value.glovesAttack()
+                    : 0);
             case SPEED -> item.slot() == EquipmentSlot.SHOES ? value.shoesSpeed() : 0;
             case JUMP -> item.slot() == EquipmentSlot.SHOES ? value.shoesJump() : 0;
-            case DEFENSE, ALL_STATS, ENEMY_DEFENSE_IGNORED -> 0;
+            case DEFENSE, ALL_STATS, BOSS_DAMAGE, DAMAGE, ENEMY_DEFENSE_IGNORED -> 0;
         };
     }
 

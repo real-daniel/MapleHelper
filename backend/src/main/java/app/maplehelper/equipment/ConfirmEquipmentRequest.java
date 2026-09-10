@@ -12,6 +12,10 @@ public record ConfirmEquipmentRequest(
         @NotNull
         EquipmentSlot slot,
 
+        @Min(1)
+        @Max(4)
+        Integer slotIndex,
+
         @NotBlank
         @Size(max = 120)
         String name,

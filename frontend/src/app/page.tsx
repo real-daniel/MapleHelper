@@ -1,5 +1,5 @@
-import { CharacterImporter } from "@/components/character-importer";
+import { AppTabs } from "@/components/app-tabs";
 
 export default function Home() {
-  return <CharacterImporter />;
+  return <AppTabs />;
 }

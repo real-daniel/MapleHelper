@@ -10,6 +10,7 @@ public record EquipmentItem(
         @Id Long id,
         Long characterProfileId,
         EquipmentSlot slot,
+        Integer slotIndex,
         String name,
         Integer levelRequirement,
         Integer starForce,

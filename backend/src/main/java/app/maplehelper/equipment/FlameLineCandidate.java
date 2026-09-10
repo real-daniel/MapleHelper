@@ -11,7 +11,11 @@ record FlameLineCandidate(
     }
 
     String display() {
-        String suffix = contribution.values().containsKey(EquipmentStat.ALL_STATS) ? "%" : "";
+        String suffix = contribution.values().containsKey(EquipmentStat.ALL_STATS)
+                || contribution.values().containsKey(EquipmentStat.BOSS_DAMAGE)
+                || contribution.values().containsKey(EquipmentStat.DAMAGE)
+                ? "%"
+                : "";
         int value = contribution.values().values().stream().findFirst().orElse(0);
         return name + ": +" + value + suffix + " (Tier " + tier + ")";
     }
@@ -37,12 +41,20 @@ record FlameLineCandidate(
             return 4;
         }
 
-        if (name.equals("Speed")) {
+        if (name.equals("Boss Damage")) {
             return 5;
         }
 
-        if (name.equals("Jump")) {
+        if (name.equals("Damage")) {
             return 6;
+        }
+
+        if (name.equals("Speed")) {
+            return 7;
+        }
+
+        if (name.equals("Jump")) {
+            return 8;
         }
 
         return 10;
