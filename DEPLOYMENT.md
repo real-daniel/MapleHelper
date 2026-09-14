@@ -54,8 +54,8 @@ If the free instance is too small for OCR or its cold starts are disruptive, cha
 1. Sign in to Vercel and select **Add New > Project**.
 2. Import the MapleHelper GitHub repository.
 3. Set **Root Directory** to `frontend`.
-4. Set **Framework Preset** to **Next.js**.
-5. Under **Build and Deployment**, make sure **Output Directory** is not overridden. Do not set it to `public`; Vercel configures Next.js output automatically.
+4. Set **Framework Preset** to **Next.js**. The checked-in `frontend/vercel.json` also pins the framework and `.next` output directory so Vercel cannot mistake the app for a generic static site.
+5. Under **Build and Deployment**, do not set the Output Directory to `public`.
 6. Add this production environment variable:
 
 ```text
