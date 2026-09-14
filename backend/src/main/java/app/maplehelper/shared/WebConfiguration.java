@@ -23,7 +23,9 @@ public class WebConfiguration implements WebFluxConfigurer {
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/api/**")
                 .allowedOrigins(frontendOrigins)
+                .allowedHeaders("Content-Type", "X-CSRF-TOKEN")
                 .allowedMethods("GET", "POST", "PUT", "DELETE")
+                .allowCredentials(true)
                 .maxAge(3600);
     }
 }

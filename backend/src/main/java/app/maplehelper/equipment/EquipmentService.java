@@ -1,6 +1,8 @@
 package app.maplehelper.equipment;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import app.maplehelper.profile.CharacterProfileNotFoundException;
+import app.maplehelper.profile.CharacterProfileRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.http.MediaType;
@@ -31,6 +33,7 @@ public class EquipmentService {
 
     private final EquipmentItemRepository repository;
     private final EquipmentCatalogItemRepository catalogRepository;
+    private final CharacterProfileRepository profileRepository;
     private final String tesseractCommand;
     private final String pythonCommand;
     private final String starCounterScript;
@@ -43,6 +46,7 @@ public class EquipmentService {
     public EquipmentService(
             EquipmentItemRepository repository,
             EquipmentCatalogItemRepository catalogRepository,
+            CharacterProfileRepository profileRepository,
             @Value("${maplehelper.ocr.tesseract-command:tesseract}") String tesseractCommand,
             @Value("${maplehelper.cv.python-command:python}") String pythonCommand,
             @Value("${maplehelper.cv.star-counter-script:scripts/count_starforce.py}") String starCounterScript,
@@ -53,6 +57,7 @@ public class EquipmentService {
             EquipmentFlameCalculator flameCalculator) {
         this.repository = repository;
         this.catalogRepository = catalogRepository;
+        this.profileRepository = profileRepository;
         this.tesseractCommand = tesseractCommand;
         this.pythonCommand = pythonCommand;
         this.starCounterScript = starCounterScript;
@@ -186,12 +191,19 @@ public class EquipmentService {
         return name != null && name.toLowerCase(java.util.Locale.ROOT).contains("sweetwater");
     }
 
-    public Mono<EquipmentItem> confirm(ConfirmEquipmentRequest request) {
+    public Mono<EquipmentItem> confirm(ConfirmEquipmentRequest request, long appUserId) {
         Instant now = Instant.now();
-        return resolveSaveSlot(request)
-                .flatMap(resolvedSlot -> deleteExistingSlot(request.characterProfileId(), resolvedSlot.slot(), resolvedSlot.slotIndex())
+        Mono<Void> profileOwnership = request.characterProfileId() == null
+                ? Mono.empty()
+                : profileRepository.findByIdAndAppUserId(request.characterProfileId(), appUserId)
+                        .switchIfEmpty(Mono.error(new CharacterProfileNotFoundException(request.characterProfileId())))
+                        .then();
+
+        return profileOwnership.then(resolveSaveSlot(request, appUserId))
+                .flatMap(resolvedSlot -> deleteExistingSlot(appUserId, request.characterProfileId(), resolvedSlot.slot(), resolvedSlot.slotIndex())
                         .then(repository.save(new EquipmentItem(
                                 null,
+                                appUserId,
                                 request.characterProfileId(),
                                 resolvedSlot.slot(),
                                 resolvedSlot.slotIndex(),
@@ -210,18 +222,18 @@ public class EquipmentService {
                                 now))));
     }
 
-    private Mono<Void> deleteExistingSlot(Long characterProfileId, EquipmentSlot slot, Integer slotIndex) {
+    private Mono<Void> deleteExistingSlot(long appUserId, Long characterProfileId, EquipmentSlot slot, Integer slotIndex) {
         if (characterProfileId == null) {
             return Mono.empty();
         }
 
-        return repository.findAllByCharacterProfileIdOrderByUpdatedAtDesc(characterProfileId)
+        return repository.findAllByAppUserIdAndCharacterProfileIdOrderByUpdatedAtDesc(appUserId, characterProfileId)
                 .filter(existing -> existing.slot() == slot && Objects.equals(existing.slotIndex(), slotIndex))
                 .flatMap(existing -> repository.deleteById(existing.id()))
                 .then();
     }
 
-    private Mono<ResolvedSlot> resolveSaveSlot(ConfirmEquipmentRequest request) {
+    private Mono<ResolvedSlot> resolveSaveSlot(ConfirmEquipmentRequest request, long appUserId) {
         if (request.characterProfileId() == null) {
             return Mono.just(new ResolvedSlot(request.slot(), normalizeSlotIndex(request.slot(), request.slotIndex())));
         }
@@ -231,7 +243,7 @@ public class EquipmentService {
             return Mono.just(new ResolvedSlot(request.slot(), null));
         }
 
-        return repository.findAllByCharacterProfileIdOrderByUpdatedAtDesc(request.characterProfileId())
+        return repository.findAllByAppUserIdAndCharacterProfileIdOrderByUpdatedAtDesc(appUserId, request.characterProfileId())
                 .filter(existing -> existing.slot() == request.slot())
                 .map(EquipmentItem::slotIndex)
                 .filter(index -> index != null && index >= 1 && index <= capacity)
@@ -274,12 +286,14 @@ public class EquipmentService {
     private record ResolvedSlot(EquipmentSlot slot, Integer slotIndex) {
     }
 
-    public Flux<EquipmentItem> findAll(Long characterProfileId) {
+    public Flux<EquipmentItem> findAll(Long characterProfileId, long appUserId) {
         if (characterProfileId == null) {
-            return repository.findAllByOrderByUpdatedAtDesc();
+            return repository.findAllByAppUserIdOrderByUpdatedAtDesc(appUserId);
         }
 
-        return repository.findAllByCharacterProfileIdOrderByUpdatedAtDesc(characterProfileId);
+        return profileRepository.findByIdAndAppUserId(characterProfileId, appUserId)
+                .switchIfEmpty(Mono.error(new CharacterProfileNotFoundException(characterProfileId)))
+                .flatMapMany(profile -> repository.findAllByAppUserIdAndCharacterProfileIdOrderByUpdatedAtDesc(appUserId, characterProfileId));
     }
 
     public Flux<EquipmentCatalogItem> findCatalog(EquipmentSlot slot) {
@@ -290,8 +304,9 @@ public class EquipmentService {
         return catalogRepository.findAllBySlotOrderByLevelRequirementAscNameAsc(slot);
     }
 
-    public Mono<Void> delete(Long id) {
-        return repository.deleteById(id);
+    public Mono<Void> delete(Long id, long appUserId) {
+        return repository.findByIdAndAppUserId(id, appUserId)
+                .flatMap(repository::delete);
     }
 
     private OcrResult runOcr(byte[] imageBytes, String suffix) {

@@ -20,6 +20,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class CharacterProfileServiceTest {
 
+    private static final long USER_ID = 99L;
+
     @Mock
     private CharacterDataProvider provider;
 
@@ -37,13 +39,14 @@ class CharacterProfileServiceTest {
     void importsAndSavesANewProfile() {
         var imported = importedCharacter();
         when(provider.findByName("Unbob", RankingRegion.NORTH_AMERICA)).thenReturn(Mono.just(imported));
-        when(repository.findByNameIgnoreCaseAndRegion("Unbob", RankingRegion.NORTH_AMERICA)).thenReturn(Mono.empty());
+        when(repository.findByAppUserIdAndNameIgnoreCaseAndRegion(USER_ID, "Unbob", RankingRegion.NORTH_AMERICA)).thenReturn(Mono.empty());
         when(repository.save(any(CharacterProfile.class))).thenAnswer(invocation ->
                 Mono.just(invocation.getArgument(0, CharacterProfile.class)));
 
-        StepVerifier.create(service.importAndSave(new CreateCharacterProfileRequest(" Unbob ", RankingRegion.NORTH_AMERICA)))
+        StepVerifier.create(service.importAndSave(new CreateCharacterProfileRequest(" Unbob ", RankingRegion.NORTH_AMERICA), USER_ID))
                 .assertNext(profile -> {
                     org.assertj.core.api.Assertions.assertThat(profile.id()).isNull();
+                    org.assertj.core.api.Assertions.assertThat(profile.appUserId()).isEqualTo(USER_ID);
                     org.assertj.core.api.Assertions.assertThat(profile.name()).isEqualTo("Unbob");
                     org.assertj.core.api.Assertions.assertThat(profile.world()).isEqualTo("Kronos");
                     org.assertj.core.api.Assertions.assertThat(profile.imageUrl()).contains("msavatar1.nexon.net");
@@ -57,15 +60,15 @@ class CharacterProfileServiceTest {
         var imported = importedCharacter();
         Instant createdAt = Instant.parse("2026-01-01T00:00:00Z");
         var existing = new CharacterProfile(
-                42L, "Unbob", "Kronos", "Adele", RankingRegion.NORTH_AMERICA,
+                42L, USER_ID, "Unbob", "Kronos", "Adele", RankingRegion.NORTH_AMERICA,
                 10L, 20L, null, imported.sourceUrl().toString(), imported.retrievedAt(), createdAt, createdAt);
 
         when(provider.findByName("Unbob", RankingRegion.NORTH_AMERICA)).thenReturn(Mono.just(imported));
-        when(repository.findByNameIgnoreCaseAndRegion("Unbob", RankingRegion.NORTH_AMERICA)).thenReturn(Mono.just(existing));
+        when(repository.findByAppUserIdAndNameIgnoreCaseAndRegion(USER_ID, "Unbob", RankingRegion.NORTH_AMERICA)).thenReturn(Mono.just(existing));
         when(repository.save(any(CharacterProfile.class))).thenAnswer(invocation ->
                 Mono.just(invocation.getArgument(0, CharacterProfile.class)));
 
-        StepVerifier.create(service.importAndSave(new CreateCharacterProfileRequest("Unbob", RankingRegion.NORTH_AMERICA)))
+        StepVerifier.create(service.importAndSave(new CreateCharacterProfileRequest("Unbob", RankingRegion.NORTH_AMERICA), USER_ID))
                 .assertNext(profile -> {
                     org.assertj.core.api.Assertions.assertThat(profile.id()).isEqualTo(42L);
                     org.assertj.core.api.Assertions.assertThat(profile.createdAt()).isEqualTo(createdAt);

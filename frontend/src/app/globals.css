@@ -9,6 +9,53 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+.auth-screen {
+  display: grid;
+  min-height: 70vh;
+  place-items: center;
+}
+
+.auth-card {
+  width: min(100%, 440px);
+  margin: 0;
+  padding: 28px;
+  text-align: center;
+}
+
+.discord-login {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 12px;
+  padding: 8px 16px;
+  border-radius: 6px;
+  background: #5865f2;
+  color: white;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.auth-bar {
+  display: flex;
+  max-width: 920px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 20px auto 0;
+  padding: 0 20px;
+}
+
+.auth-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.auth-user img {
+  border-radius: 50%;
+}
+
 main {
   max-width: 960px;
   margin: 32px auto;

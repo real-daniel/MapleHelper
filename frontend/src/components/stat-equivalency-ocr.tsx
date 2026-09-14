@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { apiFetch } from "@/lib/api";
 
 type CharacterStatEquivalency = {
   stat: string;
@@ -15,8 +16,6 @@ type CharacterStatEquivalencyExtraction = {
   extractionStatus: string;
   extractionNotes: string;
 };
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
 
 export function StatEquivalencyOcr() {
   const [file, setFile] = useState<File | null>(null);
@@ -39,7 +38,7 @@ export function StatEquivalencyOcr() {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const response = await fetch(`${API_BASE_URL}/api/v1/character-stat-equivalencies/extract`, {
+      const response = await apiFetch("/api/v1/character-stat-equivalencies/extract", {
         method: "POST",
         body: formData,
       });
