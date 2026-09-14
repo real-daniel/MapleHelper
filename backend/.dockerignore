@@ -1,0 +1,7 @@
+target/
+bin/
+scripts/__pycache__/
+*.py[cod]
+*.log
+.env
+.env.*

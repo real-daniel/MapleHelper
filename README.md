@@ -67,7 +67,7 @@ Equipment OCR uses a local Tesseract executable. Install Tesseract and make `tes
 TESSERACT_COMMAND=C:\Program Files\Tesseract-OCR\tesseract.exe
 ```
 
-Star Force counting uses a local Python helper at `backend/scripts/count_starforce.py`. It requires Python, Pillow, and NumPy, and can be configured with:
+Star Force counting and screenshot preprocessing use local Python helpers under `backend/scripts`. Install their pinned dependencies with `pip install -r backend/requirements.txt`. The commands can be configured with:
 
 ```text
 PYTHON_COMMAND=python
@@ -84,6 +84,10 @@ npm run dev
 ```
 
 Open `http://localhost:3000`.
+
+## Deploy
+
+The prepared production architecture uses Vercel for the Next.js frontend and a Render Blueprint for the containerized Spring Boot API and PostgreSQL database. See [DEPLOYMENT.md](DEPLOYMENT.md) for the complete account, environment-variable, DNS, verification, and rollback procedure.
 
 ## Current limitation
 

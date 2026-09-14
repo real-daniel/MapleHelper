@@ -5,6 +5,10 @@
 *.iml
 .tools/
 
+__pycache__/
+*.py[cod]
+*.tsbuildinfo
+
 backend/target/
 frontend/.next/
 frontend/node_modules/

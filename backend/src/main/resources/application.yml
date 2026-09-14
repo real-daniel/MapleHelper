@@ -2,11 +2,11 @@ spring:
   application:
     name: maplehelper-backend
   r2dbc:
-    url: ${DATABASE_URL:r2dbc:postgresql://localhost:5433/maplehelper}
+    url: r2dbc:postgresql://${DATABASE_HOST:localhost}:${DATABASE_PORT:5433}/${DATABASE_NAME:maplehelper}
     username: ${DATABASE_USERNAME:maplehelper}
     password: ${DATABASE_PASSWORD:maplehelper}
   flyway:
-    url: ${MIGRATION_DATABASE_URL:jdbc:postgresql://localhost:5433/maplehelper}
+    url: jdbc:postgresql://${DATABASE_HOST:localhost}:${DATABASE_PORT:5433}/${DATABASE_NAME:maplehelper}
     user: ${DATABASE_USERNAME:maplehelper}
     password: ${DATABASE_PASSWORD:maplehelper}
 
@@ -20,7 +20,7 @@ management:
         include: health,info
 
 maplehelper:
-  frontend-origin: ${FRONTEND_ORIGIN:http://localhost:3000}
+  frontend-origins: ${FRONTEND_ORIGINS:http://localhost:3000}
   nexon-rankings:
     base-url: https://www.nexon.com
     user-agent: MapleHelper/0.1 (+https://github.com/)

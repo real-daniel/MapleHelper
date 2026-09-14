@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: maplehelper-api
+    runtime: docker
+    plan: free
+    rootDir: backend
+    healthCheckPath: /actuator/health
+    autoDeployTrigger: commit
+    envVars:
+      - key: DATABASE_HOST
+        fromDatabase:
+          name: maplehelper-db
+          property: host
+      - key: DATABASE_PORT
+        value: "5432"
+      - key: DATABASE_NAME
+        fromDatabase:
+          name: maplehelper-db
+          property: database
+      - key: DATABASE_USERNAME
+        fromDatabase:
+          name: maplehelper-db
+          property: user
+      - key: DATABASE_PASSWORD
+        fromDatabase:
+          name: maplehelper-db
+          property: password
+      - key: FRONTEND_ORIGINS
+        sync: false
+      - key: PYTHON_COMMAND
+        value: python3
+      - key: TESSERACT_COMMAND
+        value: tesseract
+
+databases:
+  - name: maplehelper-db
+    databaseName: maplehelper
+    user: maplehelper
+    plan: free
+    postgresMajorVersion: "16"
+    ipAllowList: []

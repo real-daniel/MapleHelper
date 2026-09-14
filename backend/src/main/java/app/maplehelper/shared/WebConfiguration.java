@@ -5,19 +5,24 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.reactive.config.CorsRegistry;
 import org.springframework.web.reactive.config.WebFluxConfigurer;
 
+import java.util.Arrays;
+
 @Configuration
 public class WebConfiguration implements WebFluxConfigurer {
 
-    private final String frontendOrigin;
+    private final String[] frontendOrigins;
 
-    public WebConfiguration(@Value("${maplehelper.frontend-origin}") String frontendOrigin) {
-        this.frontendOrigin = frontendOrigin;
+    public WebConfiguration(@Value("${maplehelper.frontend-origins}") String frontendOrigins) {
+        this.frontendOrigins = Arrays.stream(frontendOrigins.split(","))
+                .map(String::trim)
+                .filter(origin -> !origin.isEmpty())
+                .toArray(String[]::new);
     }
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/api/**")
-                .allowedOrigins(frontendOrigin)
+                .allowedOrigins(frontendOrigins)
                 .allowedMethods("GET", "POST", "PUT", "DELETE")
                 .maxAge(3600);
     }
