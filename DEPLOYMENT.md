@@ -54,17 +54,18 @@ If the free instance is too small for OCR or its cold starts are disruptive, cha
 1. Sign in to Vercel and select **Add New > Project**.
 2. Import the MapleHelper GitHub repository.
 3. Set **Root Directory** to `frontend`.
-4. Keep the detected **Next.js** framework preset and default build settings.
-5. Add this production environment variable:
+4. Set **Framework Preset** to **Next.js**.
+5. Under **Build and Deployment**, make sure **Output Directory** is not overridden. Do not set it to `public`; Vercel configures Next.js output automatically.
+6. Add this production environment variable:
 
 ```text
 NEXT_PUBLIC_API_BASE_URL=https://maplehelper-api.onrender.com
 ```
 
-6. Select **Deploy**.
-7. Copy the generated production URL, such as `https://maplehelper.vercel.app`.
-8. In the Render API's **Environment** settings, change `FRONTEND_ORIGINS` to that exact Vercel URL and wait for the API redeploy.
-9. Open the Vercel URL and test character import and an OCR upload.
+7. Select **Deploy**.
+8. Copy the generated production URL, such as `https://maplehelper.vercel.app`.
+9. In the Render API's **Environment** settings, change `FRONTEND_ORIGINS` to that exact Vercel URL and wait for the API redeploy.
+10. Open the Vercel URL and test character import and an OCR upload.
 
 `NEXT_PUBLIC_API_BASE_URL` is embedded in the browser build, so every change to it requires a new Vercel deployment.
 

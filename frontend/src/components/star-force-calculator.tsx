@@ -72,7 +72,7 @@ function formatMeso(value: number) {
 }
 
 export function StarForceCalculator() {
-  const initialSettings = useMemo(loadStarForceSettings, []);
+  const initialSettings = useMemo(() => loadStarForceSettings(), []);
   const [level, setLevel] = useState(200);
   const [current, setCurrent] = useState(17);
   const [target, setTarget] = useState(22);
