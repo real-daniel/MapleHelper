@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest;
 import org.springframework.security.oauth2.client.userinfo.ReactiveOAuth2UserService;
@@ -30,6 +31,17 @@ class DiscordOAuth2UserServiceTest {
 
     @Mock
     private OAuth2UserRequest request;
+
+    @Test
+    void springSelectsTheRepositoryConstructor() {
+        try (var context = new AnnotationConfigApplicationContext()) {
+            context.getBeanFactory().registerSingleton("appUserRepository", repository);
+            context.register(DiscordOAuth2UserService.class);
+            context.refresh();
+
+            assertThat(context.getBean(DiscordOAuth2UserService.class)).isNotNull();
+        }
+    }
 
     @Test
     void createsAnApplicationUserFromDiscordIdentity() {
