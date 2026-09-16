@@ -1,6 +1,24 @@
 spring:
   application:
     name: maplehelper-backend
+  security:
+    oauth2:
+      client:
+        registration:
+          discord:
+            client-id: ${DISCORD_CLIENT_ID:discord-client-id-not-configured}
+            client-secret: ${DISCORD_CLIENT_SECRET:discord-client-secret-not-configured}
+            client-authentication-method: client_secret_post
+            authorization-grant-type: authorization_code
+            redirect-uri: ${DISCORD_REDIRECT_URI:http://localhost:8080/login/oauth2/code/discord}
+            scope: identify
+            client-name: Discord
+        provider:
+          discord:
+            authorization-uri: https://discord.com/oauth2/authorize
+            token-uri: https://discord.com/api/oauth2/token
+            user-info-uri: https://discord.com/api/v10/users/@me
+            user-name-attribute: id
   r2dbc:
     url: r2dbc:postgresql://${DATABASE_HOST:localhost}:${DATABASE_PORT:5433}/${DATABASE_NAME:maplehelper}
     username: ${DATABASE_USERNAME:maplehelper}
@@ -12,6 +30,15 @@ spring:
 
 server:
   port: ${PORT:8080}
+  forward-headers-strategy: framework
+  reactive:
+    session:
+      timeout: 7d
+      cookie:
+        name: MAPLEHELPER_SESSION
+        http-only: true
+        secure: ${SESSION_COOKIE_SECURE:false}
+        same-site: ${SESSION_COOKIE_SAME_SITE:lax}
 
 management:
   endpoints:
@@ -21,6 +48,8 @@ management:
 
 maplehelper:
   frontend-origins: ${FRONTEND_ORIGINS:http://localhost:3000}
+  frontend-login-success-url: ${FRONTEND_LOGIN_SUCCESS_URL:http://localhost:3000}
+  frontend-login-failure-url: ${FRONTEND_LOGIN_FAILURE_URL:http://localhost:3000/?login=error}
   nexon-rankings:
     base-url: https://www.nexon.com
     user-agent: MapleHelper/0.1 (+https://github.com/)

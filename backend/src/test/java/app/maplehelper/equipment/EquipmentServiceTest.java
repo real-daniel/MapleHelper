@@ -1,6 +1,9 @@
 package app.maplehelper.equipment;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import app.maplehelper.character.RankingRegion;
+import app.maplehelper.profile.CharacterProfile;
+import app.maplehelper.profile.CharacterProfileRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,11 +25,16 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class EquipmentServiceTest {
 
+    private static final long USER_ID = 99L;
+
     @Mock
     private EquipmentItemRepository repository;
 
     @Mock
     private EquipmentCatalogItemRepository catalogRepository;
+
+    @Mock
+    private CharacterProfileRepository profileRepository;
 
     @Mock
     private EquipmentTextParser textParser;
@@ -41,6 +49,7 @@ class EquipmentServiceTest {
         service = new EquipmentService(
                 repository,
                 catalogRepository,
+                profileRepository,
                 "tesseract",
                 "python",
                 "scripts/count_starforce.py",
@@ -53,14 +62,16 @@ class EquipmentServiceTest {
 
     @Test
     void savesRingToFirstEmptyRingSlotForProfile() {
-        when(repository.findAllByCharacterProfileIdOrderByUpdatedAtDesc(7L)).thenReturn(Flux.just(
+        stubOwnedProfile();
+        when(repository.findAllByAppUserIdAndCharacterProfileIdOrderByUpdatedAtDesc(USER_ID, 7L)).thenReturn(Flux.just(
                 item(1L, EquipmentSlot.RING, 1),
                 item(2L, EquipmentSlot.RING, 2),
                 item(3L, EquipmentSlot.RING, 3)));
         when(repository.save(any(EquipmentItem.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
-        StepVerifier.create(service.confirm(request(7L, EquipmentSlot.RING, null, "Guardian Angel Ring")))
+        StepVerifier.create(service.confirm(request(7L, EquipmentSlot.RING, null, "Guardian Angel Ring"), USER_ID))
                 .assertNext(saved -> {
+                    assertThat(saved.appUserId()).isEqualTo(USER_ID);
                     assertThat(saved.slot()).isEqualTo(EquipmentSlot.RING);
                     assertThat(saved.slotIndex()).isEqualTo(4);
                 })
@@ -71,7 +82,8 @@ class EquipmentServiceTest {
 
     @Test
     void replacesChosenRingSlotWhenRingFamilyIsFull() {
-        when(repository.findAllByCharacterProfileIdOrderByUpdatedAtDesc(7L)).thenReturn(Flux.just(
+        stubOwnedProfile();
+        when(repository.findAllByAppUserIdAndCharacterProfileIdOrderByUpdatedAtDesc(USER_ID, 7L)).thenReturn(Flux.just(
                 item(1L, EquipmentSlot.RING, 1),
                 item(2L, EquipmentSlot.RING, 2),
                 item(3L, EquipmentSlot.RING, 3),
@@ -79,7 +91,7 @@ class EquipmentServiceTest {
         when(repository.deleteById(2L)).thenReturn(Mono.empty());
         when(repository.save(any(EquipmentItem.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
-        StepVerifier.create(service.confirm(request(7L, EquipmentSlot.RING, 2, "Endless Terror")))
+        StepVerifier.create(service.confirm(request(7L, EquipmentSlot.RING, 2, "Endless Terror"), USER_ID))
                 .assertNext(saved -> {
                     assertThat(saved.slot()).isEqualTo(EquipmentSlot.RING);
                     assertThat(saved.slotIndex()).isEqualTo(2);
@@ -91,12 +103,13 @@ class EquipmentServiceTest {
 
     @Test
     void replacesSingleSlotEquipmentForProfile() {
-        when(repository.findAllByCharacterProfileIdOrderByUpdatedAtDesc(7L)).thenReturn(Flux.just(
+        stubOwnedProfile();
+        when(repository.findAllByAppUserIdAndCharacterProfileIdOrderByUpdatedAtDesc(USER_ID, 7L)).thenReturn(Flux.just(
                 item(8L, EquipmentSlot.BELT, null)));
         when(repository.deleteById(8L)).thenReturn(Mono.empty());
         when(repository.save(any(EquipmentItem.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
-        StepVerifier.create(service.confirm(request(7L, EquipmentSlot.BELT, null, "Dreamy Belt")))
+        StepVerifier.create(service.confirm(request(7L, EquipmentSlot.BELT, null, "Dreamy Belt"), USER_ID))
                 .assertNext(saved -> assertThat(saved.slot()).isEqualTo(EquipmentSlot.BELT))
                 .verifyComplete();
 
@@ -154,6 +167,7 @@ class EquipmentServiceTest {
         Instant now = Instant.parse("2026-01-01T00:00:00Z");
         return new EquipmentItem(
                 id,
+                USER_ID,
                 7L,
                 slot,
                 slotIndex,
@@ -170,5 +184,12 @@ class EquipmentServiceTest {
                 null,
                 now,
                 now);
+    }
+
+    private void stubOwnedProfile() {
+        Instant now = Instant.parse("2026-01-01T00:00:00Z");
+        when(profileRepository.findByIdAndAppUserId(7L, USER_ID)).thenReturn(Mono.just(new CharacterProfile(
+                7L, USER_ID, "Unbob", "Kronos", "Adele", RankingRegion.NORTH_AMERICA,
+                1L, 1L, null, "https://example.com", now, now, now)));
     }
 }

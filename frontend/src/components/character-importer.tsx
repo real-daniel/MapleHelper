@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { FormEvent, useEffect, useState } from "react";
 import { UpgradeRecommendations } from "@/components/upgrade-recommendations";
+import { API_BASE_URL, apiFetch } from "@/lib/api";
 
 type Region = "NORTH_AMERICA" | "EUROPE";
 
@@ -60,8 +61,6 @@ type EquipmentItem = Omit<EquipmentDraft, "originalFilename" | "imageBytes" | "e
   updatedAt: string;
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
-
 const EQUIPMENT_SLOTS: EquipmentSlot[] = [
   "RING", "PENDANT",
   "WEAPON", "SECONDARY", "EMBLEM",
@@ -101,7 +100,7 @@ export function CharacterImporter() {
   async function loadProfiles() {
     setMessage("");
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/profiles`);
+      const response = await apiFetch("/api/v1/profiles");
       const body = await readBody(response);
       if (!response.ok) throw new Error(body.message ?? "Could not load profiles.");
       const loadedProfiles = body as CharacterProfile[];
@@ -119,7 +118,7 @@ export function CharacterImporter() {
     setMessage("");
     try {
       const params = profileId ? `?characterProfileId=${profileId}` : "";
-      const response = await fetch(`${API_BASE_URL}/api/v1/equipment${params}`);
+      const response = await apiFetch(`/api/v1/equipment${params}`);
       const body = await readBody(response);
       if (!response.ok) throw new Error(body.message ?? "Could not load equipment.");
       setEquipment(body as EquipmentItem[]);
@@ -136,7 +135,7 @@ export function CharacterImporter() {
 
     try {
       const params = new URLSearchParams({ name: name.trim(), region });
-      const response = await fetch(`${API_BASE_URL}/api/v1/characters/import?${params}`);
+      const response = await apiFetch(`/api/v1/characters/import?${params}`);
       const body = await readBody(response);
       if (!response.ok) throw new Error(body.message ?? "Import failed.");
       setCharacter(body as ImportedCharacter);
@@ -153,7 +152,7 @@ export function CharacterImporter() {
     setLoading(true);
     setMessage("");
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/profiles/import`, {
+      const response = await apiFetch("/api/v1/profiles/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: character.name, region: character.region }),
@@ -176,7 +175,7 @@ export function CharacterImporter() {
   async function deleteProfile(id: number) {
     setMessage("");
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/profiles/${id}`, { method: "DELETE" });
+      const response = await apiFetch(`/api/v1/profiles/${id}`, { method: "DELETE" });
       if (!response.ok) {
         const body = await readBody(response);
         throw new Error(body.message ?? "Delete failed.");
@@ -205,7 +204,7 @@ export function CharacterImporter() {
     try {
       const formData = new FormData();
       formData.append("file", equipmentFile);
-      const response = await fetch(`${API_BASE_URL}/api/v1/equipment/extract`, {
+      const response = await apiFetch("/api/v1/equipment/extract", {
         method: "POST",
         body: formData,
       });
@@ -253,7 +252,7 @@ export function CharacterImporter() {
     setLoading(true);
     setMessage("");
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/equipment`, {
+      const response = await apiFetch("/api/v1/equipment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -289,7 +288,7 @@ export function CharacterImporter() {
   async function deleteEquipment(id: number) {
     setMessage("");
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/equipment/${id}`, { method: "DELETE" });
+      const response = await apiFetch(`/api/v1/equipment/${id}`, { method: "DELETE" });
       if (!response.ok) {
         const body = await readBody(response);
         throw new Error(body.message ?? "Equipment delete failed.");

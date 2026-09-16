@@ -1,9 +1,11 @@
 package app.maplehelper.equipment;
 
+import app.maplehelper.auth.DiscordPrincipal;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.multipart.FilePart;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -34,13 +36,17 @@ public class EquipmentController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public Mono<EquipmentItem> confirm(@Valid @RequestBody ConfirmEquipmentRequest request) {
-        return service.confirm(request);
+    public Mono<EquipmentItem> confirm(
+            @Valid @RequestBody ConfirmEquipmentRequest request,
+            @AuthenticationPrincipal DiscordPrincipal user) {
+        return service.confirm(request, user.appUserId());
     }
 
     @GetMapping
-    public Flux<EquipmentItem> findAll(@RequestParam(required = false) Long characterProfileId) {
-        return service.findAll(characterProfileId);
+    public Flux<EquipmentItem> findAll(
+            @RequestParam(required = false) Long characterProfileId,
+            @AuthenticationPrincipal DiscordPrincipal user) {
+        return service.findAll(characterProfileId, user.appUserId());
     }
 
     @GetMapping("/catalog")
@@ -50,7 +56,9 @@ public class EquipmentController {
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public Mono<Void> delete(@PathVariable Long id) {
-        return service.delete(id);
+    public Mono<Void> delete(
+            @PathVariable Long id,
+            @AuthenticationPrincipal DiscordPrincipal user) {
+        return service.delete(id, user.appUserId());
     }
 }

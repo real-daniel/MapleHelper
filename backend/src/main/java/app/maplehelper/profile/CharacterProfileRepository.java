@@ -7,7 +7,9 @@ import reactor.core.publisher.Mono;
 
 public interface CharacterProfileRepository extends ReactiveCrudRepository<CharacterProfile, Long> {
 
-    Mono<CharacterProfile> findByNameIgnoreCaseAndRegion(String name, RankingRegion region);
+    Mono<CharacterProfile> findByAppUserIdAndNameIgnoreCaseAndRegion(Long appUserId, String name, RankingRegion region);
 
-    Flux<CharacterProfile> findAllByOrderByUpdatedAtDesc();
+    Flux<CharacterProfile> findAllByAppUserIdOrderByUpdatedAtDesc(Long appUserId);
+
+    Mono<CharacterProfile> findByIdAndAppUserId(Long id, Long appUserId);
 }

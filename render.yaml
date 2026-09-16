@@ -27,6 +27,20 @@ services:
           property: password
       - key: FRONTEND_ORIGINS
         sync: false
+      - key: FRONTEND_LOGIN_SUCCESS_URL
+        sync: false
+      - key: FRONTEND_LOGIN_FAILURE_URL
+        sync: false
+      - key: DISCORD_CLIENT_ID
+        sync: false
+      - key: DISCORD_CLIENT_SECRET
+        sync: false
+      - key: DISCORD_REDIRECT_URI
+        sync: false
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+      - key: SESSION_COOKIE_SAME_SITE
+        value: lax
       - key: PYTHON_COMMAND
         value: python3
       - key: TESSERACT_COMMAND

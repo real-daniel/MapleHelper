@@ -21,39 +21,40 @@ public class CharacterProfileService {
         this.repository = repository;
     }
 
-    public Mono<CharacterProfile> importAndSave(CreateCharacterProfileRequest request) {
+    public Mono<CharacterProfile> importAndSave(CreateCharacterProfileRequest request, long appUserId) {
         String name = request.name().trim();
         return characterDataProvider.findByName(name, request.region())
                 .flatMap(imported -> repository
-                        .findByNameIgnoreCaseAndRegion(imported.name(), imported.region())
-                        .flatMap(existing -> repository.save(fromImport(imported, existing.id(), existing.createdAt())))
-                        .switchIfEmpty(Mono.defer(() -> repository.save(fromImport(imported, null, Instant.now())))));
+                        .findByAppUserIdAndNameIgnoreCaseAndRegion(appUserId, imported.name(), imported.region())
+                        .flatMap(existing -> repository.save(fromImport(imported, existing.id(), appUserId, existing.createdAt())))
+                        .switchIfEmpty(Mono.defer(() -> repository.save(fromImport(imported, null, appUserId, Instant.now())))));
     }
 
-    public Flux<CharacterProfile> findAll() {
-        return repository.findAllByOrderByUpdatedAtDesc();
+    public Flux<CharacterProfile> findAll(long appUserId) {
+        return repository.findAllByAppUserIdOrderByUpdatedAtDesc(appUserId);
     }
 
-    public Mono<CharacterProfile> findById(long id) {
-        return repository.findById(id)
+    public Mono<CharacterProfile> findById(long id, long appUserId) {
+        return repository.findByIdAndAppUserId(id, appUserId)
                 .switchIfEmpty(Mono.error(new CharacterProfileNotFoundException(id)));
     }
 
-    public Mono<CharacterProfile> update(long id, UpdateCharacterProfileRequest request) {
-        return findById(id).flatMap(existing -> repository.save(new CharacterProfile(
-                existing.id(), existing.name(), request.world().trim(), request.job().trim(), existing.region(),
+    public Mono<CharacterProfile> update(long id, UpdateCharacterProfileRequest request, long appUserId) {
+        return findById(id, appUserId).flatMap(existing -> repository.save(new CharacterProfile(
+                existing.id(), existing.appUserId(), existing.name(), request.world().trim(), request.job().trim(), existing.region(),
                 existing.weeklyRank(), existing.weeklyExperience(), existing.imageUrl(), existing.sourceUrl(),
                 existing.retrievedAt(), existing.createdAt(), Instant.now())));
     }
 
-    public Mono<Void> delete(long id) {
-        return findById(id).flatMap(repository::delete);
+    public Mono<Void> delete(long id, long appUserId) {
+        return findById(id, appUserId).flatMap(repository::delete);
     }
 
-    private CharacterProfile fromImport(ImportedCharacter imported, Long id, Instant createdAt) {
+    private CharacterProfile fromImport(ImportedCharacter imported, Long id, long appUserId, Instant createdAt) {
         Instant now = Instant.now();
         return new CharacterProfile(
                 id,
+                appUserId,
                 imported.name(),
                 imported.world(),
                 imported.job(),

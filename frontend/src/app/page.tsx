@@ -1,5 +1,5 @@
-import { AppTabs } from "@/components/app-tabs";
+import { AuthenticatedApp } from "@/components/authenticated-app";
 
 export default function Home() {
-  return <AppTabs />;
+  return <AuthenticatedApp />;
 }
