@@ -1,5 +1,6 @@
 package app.maplehelper.auth;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest;
 import org.springframework.security.oauth2.client.userinfo.DefaultReactiveOAuth2UserService;
 import org.springframework.security.oauth2.client.userinfo.ReactiveOAuth2UserService;
@@ -15,6 +16,7 @@ public class DiscordOAuth2UserService implements ReactiveOAuth2UserService<OAuth
     private final ReactiveOAuth2UserService<OAuth2UserRequest, OAuth2User> delegate;
     private final AppUserRepository repository;
 
+    @Autowired
     public DiscordOAuth2UserService(AppUserRepository repository) {
         this(repository, new DefaultReactiveOAuth2UserService());
     }
