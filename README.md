@@ -9,7 +9,7 @@ The application now deploys as one Cloudflare Worker. The Worker serves the stat
 - Next.js 16, React 19, and TypeScript (static export)
 - Cloudflare Workers with Hono
 - Cloudflare D1 for users, sessions, characters, and equipment
-- Cloudflare Workers AI for equipment and stat-equivalency screenshot extraction
+- Cloudflare Workers AI for screenshot transcription, followed by deterministic TypeScript parsing and calculations
 - Discord OAuth2 for sign-in
 
 The former Spring Boot implementation remains under `backend/` as a migration reference, but it is not used by the Cloudflare build or deployment.
@@ -37,6 +37,7 @@ Run verification with:
 
 ```powershell
 npm run typecheck
+npm test
 npm --prefix frontend run lint
 npm run build
 ```
@@ -56,3 +57,5 @@ The Worker preserves the browser-facing Spring API paths:
 - `/api/v1/character-stat-equivalencies/extract`
 
 This keeps the existing frontend contract intact while replacing the Java/PostgreSQL runtime.
+
+The legacy equipment behavior is also ported: fuzzy catalog matching, OCR cleanup, skill-ring/pocket/Sweetwater rules, cumulative Star Force tables, flame derivation and tier solving, multi-slot replacement, and stat-equivalency normalization. Workers AI replaces the Tesseract image-to-text runtime; deterministic application rules run after transcription.

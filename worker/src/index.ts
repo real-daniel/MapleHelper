@@ -5,6 +5,7 @@ import { importCharacter, parseRegion } from "./nexon";
 import type { AppBindings, EquipmentSlot } from "./types";
 import { EQUIPMENT_SLOTS } from "./types";
 import { extractEquipment, extractStatEquivalencies } from "./vision";
+import { equipmentSlotCapacity, resolveEquipmentSlotIndex } from "./equipment/slots";
 
 const app = new Hono<AppBindings>();
 
@@ -121,12 +122,13 @@ app.post("/api/v1/equipment", async (c) => {
   if (profileId != null) await profileById(c.env.DB, profileId, userId);
   const slot = body.slot;
   if (typeof slot !== "string" || !EQUIPMENT_SLOTS.includes(slot as EquipmentSlot)) throw new HttpError(400, "Invalid equipment slot.");
-  const capacity = slot === "RING" ? 4 : slot === "PENDANT" ? 2 : slot === "TOTEM" ? 3 : 1;
-  let slotIndex = capacity === 1 ? null : integerValue(body.slotIndex, "slotIndex", 1, capacity) ?? 1;
+  const capacity = equipmentSlotCapacity(slot as EquipmentSlot);
+  const requestedSlotIndex = capacity === 1 ? null : integerValue(body.slotIndex, "slotIndex", 1, capacity);
+  let slotIndex = resolveEquipmentSlotIndex(slot as EquipmentSlot, requestedSlotIndex, []);
   if (profileId != null && capacity > 1) {
     const occupied = await c.env.DB.prepare("SELECT slot_index FROM equipment_items WHERE app_user_id=? AND character_profile_id=? AND slot=?")
       .bind(userId, profileId, slot).all<{ slot_index: number | null }>();
-    slotIndex = Array.from({ length: capacity }, (_, i) => i + 1).find((candidate) => !occupied.results.some((row) => row.slot_index === candidate)) ?? slotIndex;
+    slotIndex = resolveEquipmentSlotIndex(slot as EquipmentSlot, requestedSlotIndex, occupied.results.map((row) => row.slot_index));
   }
   if (profileId != null) {
     await c.env.DB.prepare("DELETE FROM equipment_items WHERE app_user_id=? AND character_profile_id=? AND slot=? AND slot_index IS ?")
@@ -158,9 +160,8 @@ app.post("/api/v1/equipment", async (c) => {
 });
 
 app.delete("/api/v1/equipment/:id", async (c) => {
-  const result = await c.env.DB.prepare("DELETE FROM equipment_items WHERE id=? AND app_user_id=?")
+  await c.env.DB.prepare("DELETE FROM equipment_items WHERE id=? AND app_user_id=?")
     .bind(pathId(c.req.param("id")), currentUser(c).id).run();
-  if (!result.meta.changes) throw new HttpError(404, "Equipment was not found.");
   return c.body(null, 204);
 });
 
