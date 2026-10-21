@@ -13,7 +13,7 @@
     {
       "binding": "DB",
       "database_name": "maplehelper",
-      "database_id": "replace-with-your-d1-database-id",
+      "database_id": "a5f2197e-ae1f-450b-a28b-8e460e52774b",
       "migrations_dir": "migrations"
     }
   ],
