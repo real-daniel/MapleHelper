@@ -22,5 +22,20 @@
     "APP_URL": "https://maplehelper.achilliesftw.workers.dev",
     "NEXON_BASE_URL": "https://www.nexon.com"
   },
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  "previews": {
+    "d1_databases": [
+      {
+        "binding": "DB",
+        "database_name": "maplehelper-preview",
+        "database_id": "0ed2f5ef-1381-4845-ac25-60bf572a8093"
+      }
+    ],
+    "ai": { "binding": "AI" },
+    "vars": {
+      "APP_URL": "https://staging-maplehelper.achilliesftw.workers.dev",
+      "NEXON_BASE_URL": "https://www.nexon.com"
+    },
+    "observability": { "enabled": true }
+  }
 }

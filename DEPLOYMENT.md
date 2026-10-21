@@ -30,6 +30,16 @@ npm run db:migrate:remote
 
 The migration creates users, hashed sessions, profiles, equipment, and the equipment catalog. Existing PostgreSQL data needs a one-time export/import; do not point the Worker at the old PostgreSQL database.
 
+### Preview D1
+
+Worker previews use the separate `maplehelper-preview` database configured under `previews` in `wrangler.jsonc`. Apply preview schema and seed changes with:
+
+```powershell
+npm run db:migrate:preview
+```
+
+The shared preview database is isolated from production but is shared by all Worker preview versions. Do not store production data in it.
+
 ## 3. Configure Discord
 
 In the Discord Developer Portal, add this redirect URI, replacing the hostname after the first deployment if you use a custom domain:
@@ -52,6 +62,14 @@ Set `APP_URL` in `wrangler.jsonc` to the exact public origin. For example:
 ```
 
 The OAuth callback is always `${APP_URL}/login/oauth2/code/discord`.
+
+For the stable `staging` preview, also register this exact Discord redirect URI:
+
+```text
+https://staging-maplehelper.achilliesftw.workers.dev/login/oauth2/code/discord
+```
+
+Cloudflare preview secrets are separate from production secrets. In **Workers & Pages → maplehelper → Settings → Variables and Secrets → Previews**, add `DISCORD_CLIENT_ID` and `DISCORD_CLIENT_SECRET` to the Preview Base configuration.
 
 ## 4. Verify and deploy
 

@@ -1,0 +1,13 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "maplehelper-preview-migrations",
+  "compatibility_date": "2026-10-18",
+  "d1_databases": [
+    {
+      "binding": "PREVIEW_DB",
+      "database_name": "maplehelper-preview",
+      "database_id": "0ed2f5ef-1381-4845-ac25-60bf572a8093",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

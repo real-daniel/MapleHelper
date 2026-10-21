@@ -9,7 +9,8 @@
     "deploy": "npm run build && wrangler deploy",
     "typecheck": "tsc --noEmit",
     "db:migrate:local": "wrangler d1 migrations apply maplehelper --local",
-    "db:migrate:remote": "wrangler d1 migrations apply maplehelper --remote"
+    "db:migrate:remote": "wrangler d1 migrations apply maplehelper --remote",
+    "db:migrate:preview": "wrangler d1 migrations apply PREVIEW_DB --remote --config wrangler.preview-migrations.jsonc"
   },
   "dependencies": {
     "hono": "^4.13.13"
