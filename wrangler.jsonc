@@ -19,7 +19,7 @@
   ],
   "ai": { "binding": "AI" },
   "vars": {
-    "APP_URL": "https://maplehelper.example.com",
+    "APP_URL": "https://maplehelper.achilliesftw.workers.dev",
     "NEXON_BASE_URL": "https://www.nexon.com"
   },
   "observability": { "enabled": true }
