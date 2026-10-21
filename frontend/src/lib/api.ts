@@ -1,6 +1,6 @@
-const configuredApiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
-
-export const API_BASE_URL = configuredApiBaseUrl.replace(/\/$/, "");
+// The API and static app are served by the same Worker. Keeping this relative
+// also makes preview deployments and custom domains work without rebuilds.
+export const API_BASE_URL = "";
 
 type CsrfResponse = {
   token: string;

@@ -72,11 +72,15 @@ export function AuthenticatedApp() {
   return (
     <>
       <header className="auth-bar">
+        <div className="brand-lockup">
+          <span className="brand-mark">M</span>
+          <div><strong>MapleHelper</strong><small>Your progression companion</small></div>
+        </div>
         <div className="auth-user">
           {user.avatarUrl && <Image src={user.avatarUrl} alt="" width={36} height={36} />}
-          <span>Signed in as <strong>{user.displayName}</strong></span>
+          <span><small>Signed in as</small><strong>{user.displayName}</strong></span>
+          <button className="ghost-button" type="button" onClick={logout}>Sign out</button>
         </div>
-        <button type="button" onClick={logout}>Sign out</button>
       </header>
       {message && <main><p className="message">{message}</p></main>}
       <AppTabs />
