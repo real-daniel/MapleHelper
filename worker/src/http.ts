@@ -34,6 +34,11 @@ export function integerValue(value: unknown, field: string, min: number, max: nu
   return Number(value);
 }
 
+export function booleanValue(value: unknown, field: string): boolean {
+  if (typeof value !== "boolean") throw new HttpError(400, `${field} must be true or false.`);
+  return value;
+}
+
 export function errorResponse(c: Context<AppBindings>, error: unknown) {
   if (error instanceof HttpError) return c.json({ message: error.message }, error.status);
   console.error(error);

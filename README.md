@@ -8,7 +8,7 @@ The application now deploys as one Cloudflare Worker. The Worker serves the stat
 
 - Next.js 16, React 19, and TypeScript (static export)
 - Cloudflare Workers with Hono
-- Cloudflare D1 for users, sessions, characters, and equipment
+- Cloudflare D1 for users, sessions, characters, equipment, and per-character boss plans
 - Cloudflare Workers AI for screenshot transcription, followed by deterministic TypeScript parsing and calculations
 - Discord OAuth2 for sign-in
 
@@ -53,8 +53,11 @@ The Worker preserves the browser-facing Spring API paths:
 - `/api/v1/characters/import`
 - `/api/v1/profiles/*`
 - `/api/v1/equipment/*`
+- `/api/v1/boss-tracker/*`
 - `/api/v1/character-stat-equivalencies/extract`
 
 This keeps the existing frontend contract intact while replacing the Java/PostgreSQL runtime.
 
 The legacy equipment behavior is also ported: fuzzy catalog matching, OCR cleanup, skill-ring/pocket/Sweetwater rules, cumulative Star Force tables, flame derivation and tier solving, multi-slot replacement, and stat-equivalency normalization. Workers AI replaces the Tesseract image-to-text runtime; deterministic application rules run after transcription.
+
+The Boss Income calculator saves a separate plan for each imported character, including difficulty, editable crystal value, party split, and clear state. It reports weekly earnings and a monthly projection while keeping preview and production data isolated through their D1 bindings.

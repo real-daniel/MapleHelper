@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { currentUser, beginDiscordLogin, finishDiscordLogin, issueCsrf, logout, requireAuth, requireCsrf } from "./auth";
-import { camelRow, errorResponse, HttpError, integerValue, asObject, stringValue } from "./http";
+import { booleanValue, camelRow, errorResponse, HttpError, integerValue, asObject, stringValue } from "./http";
 import { importCharacter, parseRegion } from "./nexon";
 import type { AppBindings, EquipmentSlot } from "./types";
 import { EQUIPMENT_SLOTS } from "./types";
@@ -84,6 +84,65 @@ app.delete("/api/v1/profiles/:id", async (c) => {
     .bind(pathId(c.req.param("id")), currentUser(c).id).run();
   if (!result.meta.changes) throw new HttpError(404, "Character profile was not found.");
   return c.body(null, 204);
+});
+
+app.use("/api/v1/boss-tracker", requireAuth, requireCsrf);
+app.use("/api/v1/boss-tracker/*", requireAuth, requireCsrf);
+
+app.get("/api/v1/boss-tracker", async (c) => {
+  const userId = currentUser(c).id;
+  const profileId = pathId(c.req.query("characterProfileId") ?? "");
+  await profileById(c.env.DB, profileId, userId);
+  const rows = await c.env.DB.prepare(`SELECT boss_key,boss_name,difficulty,reset_period,crystal_value,
+    party_size,tracked,cleared,updated_at FROM boss_tracker_entries
+    WHERE app_user_id=? AND character_profile_id=? ORDER BY boss_name`)
+    .bind(userId, profileId).all<Record<string, unknown>>();
+  return c.json(rows.results.map(publicBossEntry));
+});
+
+app.put("/api/v1/boss-tracker", async (c) => {
+  const body = asObject(await c.req.json());
+  const userId = currentUser(c).id;
+  const profileId = integerValue(body.characterProfileId, "characterProfileId", 1, Number.MAX_SAFE_INTEGER);
+  if (profileId == null) throw new HttpError(400, "characterProfileId is required.");
+  await profileById(c.env.DB, profileId, userId);
+  const bossKey = stringValue(body.bossKey, "bossKey", 80, true)!;
+  if (!/^[a-z0-9-]+$/.test(bossKey)) throw new HttpError(400, "bossKey is invalid.");
+  const bossName = stringValue(body.bossName, "bossName", 80, true)!;
+  const difficulty = stringValue(body.difficulty, "difficulty", 30, true)!;
+  const resetPeriod = body.resetPeriod;
+  if (resetPeriod !== "WEEKLY" && resetPeriod !== "MONTHLY") throw new HttpError(400, "resetPeriod is invalid.");
+  const crystalValue = integerValue(body.crystalValue, "crystalValue", 0, 100_000_000_000);
+  const partySize = integerValue(body.partySize, "partySize", 1, 6);
+  if (crystalValue == null || partySize == null) throw new HttpError(400, "crystalValue and partySize are required.");
+  const tracked = booleanValue(body.tracked, "tracked");
+  const cleared = booleanValue(body.cleared, "cleared") && tracked;
+  const now = new Date().toISOString();
+  await c.env.DB.prepare(`INSERT INTO boss_tracker_entries
+    (app_user_id,character_profile_id,boss_key,boss_name,difficulty,reset_period,crystal_value,party_size,tracked,cleared,created_at,updated_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(app_user_id,character_profile_id,boss_key) DO UPDATE SET
+      boss_name=excluded.boss_name,difficulty=excluded.difficulty,reset_period=excluded.reset_period,
+      crystal_value=excluded.crystal_value,party_size=excluded.party_size,tracked=excluded.tracked,
+      cleared=excluded.cleared,updated_at=excluded.updated_at`)
+    .bind(userId, profileId, bossKey, bossName, difficulty, resetPeriod, crystalValue, partySize,
+      tracked ? 1 : 0, cleared ? 1 : 0, now, now).run();
+  const saved = await c.env.DB.prepare(`SELECT boss_key,boss_name,difficulty,reset_period,crystal_value,
+    party_size,tracked,cleared,updated_at FROM boss_tracker_entries
+    WHERE app_user_id=? AND character_profile_id=? AND boss_key=?`)
+    .bind(userId, profileId, bossKey).first<Record<string, unknown>>();
+  return c.json(publicBossEntry(saved!));
+});
+
+app.post("/api/v1/boss-tracker/reset", async (c) => {
+  const body = asObject(await c.req.json());
+  const userId = currentUser(c).id;
+  const profileId = integerValue(body.characterProfileId, "characterProfileId", 1, Number.MAX_SAFE_INTEGER);
+  if (profileId == null) throw new HttpError(400, "characterProfileId is required.");
+  await profileById(c.env.DB, profileId, userId);
+  await c.env.DB.prepare("UPDATE boss_tracker_entries SET cleared=0,updated_at=? WHERE app_user_id=? AND character_profile_id=?")
+    .bind(new Date().toISOString(), userId, profileId).run();
+  return c.json({ reset: true });
 });
 
 app.use("/api/v1/equipment", requireAuth, requireCsrf);
@@ -184,6 +243,14 @@ async function profileById(db: D1Database, id: number, userId: number) {
 function publicEquipment(row: Record<string, unknown>) {
   const { app_user_id: _private, ...visible } = row;
   return camelRow(visible);
+}
+
+function publicBossEntry(row: Record<string, unknown>) {
+  return {
+    ...camelRow(row),
+    tracked: Boolean(row.tracked),
+    cleared: Boolean(row.cleared),
+  };
 }
 
 export default app;

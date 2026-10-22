@@ -27,7 +27,7 @@ Copy the returned `database_id` into `wrangler.jsonc`, replacing `replace-with-y
 npm run db:migrate:remote
 ```
 
-The migration creates users, hashed sessions, profiles, equipment, and the equipment catalog. Existing PostgreSQL data needs a one-time export/import; do not point the Worker at the old PostgreSQL database.
+The migrations create users, hashed sessions, profiles, equipment, the equipment catalog, and per-character boss plans. Existing PostgreSQL data needs a one-time export/import; do not point the Worker at the old PostgreSQL database.
 
 ### Preview D1
 
@@ -86,6 +86,7 @@ The deploy command builds `frontend/out` and publishes it with the Worker. Verif
 - Discord sign-in returns to the application.
 - Character import and profile persistence work.
 - Equipment and stat-equivalency screenshots return editable extraction results.
+- Boss plans, party splits, and clear state persist per character.
 - Sign-out invalidates the D1 session.
 
 ## Local secrets

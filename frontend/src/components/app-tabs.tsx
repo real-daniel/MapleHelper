@@ -6,9 +6,10 @@ import { CubeCalculator } from "@/components/cube-calculator";
 import { FlameCalculator } from "@/components/flame-calculator";
 import { StarForceCalculator } from "@/components/star-force-calculator";
 import { StatEquivalencyOcr } from "@/components/stat-equivalency-ocr";
+import { BossIncomeCalculator } from "@/components/boss-income-calculator";
 
 type Area = "characters" | "calculators" | "tools";
-type Calculator = "star-force" | "cube" | "flame";
+type Calculator = "star-force" | "cube" | "flame" | "boss-income";
 
 export function AppTabs() {
   const [activeArea, setActiveArea] = useState<Area>("characters");
@@ -38,12 +39,14 @@ export function AppTabs() {
               <button type="button" aria-pressed={activeCalculator === "star-force"} onClick={() => setActiveCalculator("star-force")}>Star Force</button>
               <button type="button" aria-pressed={activeCalculator === "cube"} onClick={() => setActiveCalculator("cube")}>Cubing</button>
               <button type="button" aria-pressed={activeCalculator === "flame"} onClick={() => setActiveCalculator("flame")}>Flames</button>
+              <button type="button" aria-pressed={activeCalculator === "boss-income"} onClick={() => setActiveCalculator("boss-income")}>Boss Income</button>
             </nav>
           </aside>
           <div className="module-content">
             {activeCalculator === "star-force" && <StarForceCalculator />}
             {activeCalculator === "cube" && <CubeCalculator />}
             {activeCalculator === "flame" && <FlameCalculator />}
+            {activeCalculator === "boss-income" && <BossIncomeCalculator />}
           </div>
         </div>
       )}
