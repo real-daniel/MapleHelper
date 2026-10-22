@@ -13,7 +13,6 @@ Install dependencies:
 
 ```powershell
 npm install
-npm --prefix frontend install
 ```
 
 ## 2. Create D1
@@ -76,7 +75,7 @@ Cloudflare preview secrets are separate from production secrets. In **Workers & 
 ```powershell
 npm run typecheck
 npm test
-npm --prefix frontend run lint
+npm run lint
 npm run build
 npm run deploy
 ```

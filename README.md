@@ -20,7 +20,6 @@ Requirements: Node.js 22.12 or newer and a Cloudflare account for Workers AI-bac
 
 ```powershell
 npm install
-npm --prefix frontend install
 Copy-Item .dev.vars.example .dev.vars
 npm run db:migrate:local
 npm run build
@@ -38,7 +37,7 @@ Run verification with:
 ```powershell
 npm run typecheck
 npm test
-npm --prefix frontend run lint
+npm run lint
 npm run build
 ```
 
