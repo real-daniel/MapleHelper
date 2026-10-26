@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { BOSSES, formatMeso, personalCrystalIncome, type ResetPeriod } from "@/components/boss-tracker-data";
 
-type CharacterProfile = { id: number; name: string; world: string; job: string };
 type SavedEntry = {
   bossKey: string;
   bossName: string;
@@ -29,36 +28,16 @@ const DEFAULT_ROWS: BossState[] = BOSSES.map((boss) => ({
   cleared: false,
 }));
 
-export function BossIncomeCalculator() {
-  const [profiles, setProfiles] = useState<CharacterProfile[]>([]);
-  const [profileId, setProfileId] = useState<number | null>(null);
+export function BossTracker({ profileId, characterName }: { profileId: number; characterName: string }) {
   const [rows, setRows] = useState<BossState[]>(DEFAULT_ROWS);
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
-  const [profilesLoading, setProfilesLoading] = useState(true);
-  const [entriesLoading, setEntriesLoading] = useState(false);
+  const [entriesLoading, setEntriesLoading] = useState(true);
+  const [planLoaded, setPlanLoaded] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    void (async () => {
-      try {
-        const response = await apiFetch("/api/v1/profiles");
-        if (!response.ok) throw new Error(await responseMessage(response, "Could not load your characters."));
-        const loaded = await response.json() as CharacterProfile[];
-        setProfiles(loaded);
-        setEntriesLoading(loaded.length > 0);
-        setProfileId(loaded[0]?.id ?? null);
-      } catch (error) {
-        setMessage(errorMessage(error));
-      } finally {
-        setProfilesLoading(false);
-      }
-    })();
-  }, []);
-
-  useEffect(() => {
-    if (profileId == null) return;
     let current = true;
     void (async () => {
       try {
@@ -66,7 +45,10 @@ export function BossIncomeCalculator() {
         if (!response.ok) throw new Error(await responseMessage(response, "Could not load this boss plan."));
         const saved = await response.json() as SavedEntry[];
         const byKey = new Map(saved.map((entry) => [entry.bossKey, entry]));
-        if (current) setRows(DEFAULT_ROWS.map((row) => ({ ...row, ...byKey.get(row.bossKey) })));
+        if (current) {
+          setRows(DEFAULT_ROWS.map((row) => ({ ...row, ...byKey.get(row.bossKey) })));
+          setPlanLoaded(true);
+        }
       } catch (error) {
         if (current) setMessage(errorMessage(error));
       } finally {
@@ -100,7 +82,7 @@ export function BossIncomeCalculator() {
     const next = { ...previous, ...change };
     if (!next.tracked) next.cleared = false;
     setRows((current) => current.map((row) => row.bossKey === key ? next : row));
-    if (!save || profileId == null) return;
+    if (!save) return;
     setSaving(key);
     setMessage("");
     try {
@@ -119,7 +101,6 @@ export function BossIncomeCalculator() {
   }
 
   async function resetClears() {
-    if (profileId == null) return;
     setSaving("reset");
     setMessage("");
     try {
@@ -138,19 +119,15 @@ export function BossIncomeCalculator() {
     }
   }
 
-  const loading = profilesLoading || entriesLoading;
-  if (!loading && profiles.length === 0) {
-    return <main><h1>Boss Income</h1><section className="large-empty empty-state"><h2>Add a character first</h2><p>Import a character in Characters to save a separate boss plan for it.</p></section></main>;
+  if (entriesLoading || !planLoaded) {
+    return <div className="boss-calculator"><h2>Boss tracker</h2><p role={entriesLoading ? "status" : "alert"}>{entriesLoading ? `Loading ${characterName}’s boss plan…` : message}</p></div>;
   }
 
   const monthlyProjection = totals.weeklyPlan * 4.345 + totals.monthlyPlan;
   return (
-    <main className="boss-calculator">
+    <div className="boss-calculator" aria-label={`${characterName} boss tracker`}>
       <div className="boss-heading">
-        <div><h1>Boss Tracker &amp; Income</h1><p className="muted">Plan your clears, split crystals by party size, and track your payout.</p></div>
-        <label>Character<select value={profileId ?? ""} onChange={(event) => { setMessage(""); setEntriesLoading(true); setProfileId(Number(event.target.value)); }} disabled={loading}>
-          {profiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name} · {profile.world}</option>)}
-        </select></label>
+        <div><h2>Boss Tracker &amp; Income</h2><p className="muted">Plan {characterName}’s clears, split crystals by party size, and track their payout.</p></div>
       </div>
 
       <div className="boss-summary" aria-label="Income summary">
@@ -194,7 +171,7 @@ export function BossIncomeCalculator() {
         {visibleRows.length === 0 && <p className="empty-state">No bosses match this view.</p>}
         <p className="boss-source muted">Default values: GMS Heroic v.271 reference. Crystal values are editable so you can match your world and future balance changes.</p>
       </section>
-    </main>
+    </div>
   );
 }
 
