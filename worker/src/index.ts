@@ -120,6 +120,29 @@ app.post("/api/v1/boss-tracker/presets", async (c) => {
   return c.json({ id: Number(result.meta.last_row_id), name }, 201);
 });
 
+app.put("/api/v1/boss-tracker/presets/:id", async (c) => {
+  const userId = currentUser(c).id;
+  const id = pathId(c.req.param("id"));
+  const preset = await c.env.DB.prepare("SELECT id FROM boss_tracker_presets WHERE id=? AND app_user_id=?")
+    .bind(id, userId).first<{ id: number }>();
+  if (!preset) throw new HttpError(404, "Boss preset was not found.");
+  const body = asObject(await c.req.json());
+  const name = stringValue(body.name, "name", 80, true)!;
+  const entries = body.entries === undefined ? null : JSON.stringify(parsePresetEntries(body.entries));
+  const result = await c.env.DB.prepare(`UPDATE OR IGNORE boss_tracker_presets
+    SET name=?,entries_json=COALESCE(?,entries_json) WHERE id=? AND app_user_id=?`)
+    .bind(name, entries, id, userId).run();
+  if (!result.meta.changes) throw new HttpError(409, "A preset with that name already exists. Choose another name.");
+  return c.json({ id, name });
+});
+
+app.delete("/api/v1/boss-tracker/presets/:id", async (c) => {
+  const result = await c.env.DB.prepare("DELETE FROM boss_tracker_presets WHERE id=? AND app_user_id=?")
+    .bind(pathId(c.req.param("id")), currentUser(c).id).run();
+  if (!result.meta.changes) throw new HttpError(404, "Boss preset was not found.");
+  return c.body(null, 204);
+});
+
 app.post("/api/v1/boss-tracker/presets/:id/apply", async (c) => {
   const body = asObject(await c.req.json());
   const userId = currentUser(c).id;
@@ -195,6 +218,18 @@ app.post("/api/v1/boss-tracker/reset", async (c) => {
   await c.env.DB.prepare("UPDATE boss_tracker_entries SET cleared=0,updated_at=? WHERE app_user_id=? AND character_profile_id=?")
     .bind(new Date().toISOString(), userId, profileId).run();
   return c.json({ reset: true });
+});
+
+app.post("/api/v1/boss-tracker/clear-all", async (c) => {
+  const body = asObject(await c.req.json());
+  const userId = currentUser(c).id;
+  const profileId = integerValue(body.characterProfileId, "characterProfileId", 1, Number.MAX_SAFE_INTEGER);
+  if (profileId == null) throw new HttpError(400, "characterProfileId is required.");
+  await profileById(c.env.DB, profileId, userId);
+  await c.env.DB.prepare(`UPDATE boss_tracker_entries SET cleared=1,updated_at=?
+    WHERE app_user_id=? AND character_profile_id=? AND tracked=1`)
+    .bind(new Date().toISOString(), userId, profileId).run();
+  return c.json({ cleared: true });
 });
 
 app.use("/api/v1/equipment", requireAuth, requireCsrf);

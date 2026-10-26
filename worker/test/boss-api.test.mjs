@@ -112,6 +112,79 @@ describe("saved boss presets and account API", () => {
     expect((await app.request("/api/v1/boss-tracker/presets", {}, env)).status).toBe(401);
     const response = await app.request("/api/v1/boss-tracker/presets", { method: "POST", headers: { Cookie: "MAPLEHELPER_SESSION=session-1" } }, env);
     expect(response.status).toBe(403);
+    for (const [path, method] of [["/presets/1", "PUT"], ["/presets/1", "DELETE"], ["/clear-all", "POST"]]) {
+      const response = await app.request(`/api/v1/boss-tracker${path}`, { method, headers: { Cookie: "MAPLEHELPER_SESSION=session-1" } }, env);
+      expect(response.status).toBe(403);
+      expect((await app.request(`/api/v1/boss-tracker${path}`, { method }, env)).status).toBe(401);
+    }
+  });
+
+  it("renames a preset without changing its saved bosses", async () => {
+    const preset = await savePreset();
+    const response = await request(`/presets/${preset.id}`, "PUT", { name: "  Main weekly  " });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ id: preset.id, name: "Main weekly" });
+    expect(await (await request("/presets")).json()).toEqual([{ id: preset.id, name: "Main weekly" }]);
+    const applied = await (await request(`/presets/${preset.id}/apply`, "POST", { characterProfileId: 2 })).json();
+    expect(applied).toEqual([expect.objectContaining({ ...entry, cleared: false })]);
+  });
+
+  it("updates preset settings without changing character plans until applied", async () => {
+    const preset = await savePreset();
+    await request("", "PUT", { characterProfileId: 2, ...entry });
+    const replacement = { ...entry, bossKey: "damien", bossName: "Damien", crystalValue: 900, partySize: 2 };
+    const response = await request(`/presets/${preset.id}`, "PUT", { name: preset.name, entries: [replacement] });
+    expect(response.status).toBe(200);
+    expect((await (await request("?characterProfileId=2")).json())[0]).toMatchObject({ ...entry });
+    const applied = await (await request(`/presets/${preset.id}/apply`, "POST", { characterProfileId: 2 })).json();
+    expect(applied.find((row) => row.bossKey === "damien")).toMatchObject({ ...replacement, cleared: false });
+    expect(applied.find((row) => row.bossKey === "lotus")).toMatchObject({ tracked: false, cleared: false });
+  });
+
+  it("rejects invalid edits and duplicate names without overwriting a preset", async () => {
+    const preset = await savePreset();
+    await request("/presets", "POST", { characterProfileId: 1, name: "Other", entries: [entry] });
+    expect((await request(`/presets/${preset.id}`, "PUT", { name: "OTHER", entries: [{ ...entry, partySize: 1 }] })).status).toBe(409);
+    for (const body of [{ name: " " }, { name: "Updated", entries: [] }, { name: "Updated", entries: [{ ...entry, partySize: 7 }] }]) {
+      expect((await request(`/presets/${preset.id}`, "PUT", body)).status).toBe(400);
+    }
+    expect((await (await request("/presets")).json()).find((row) => row.id === preset.id).name).toBe(preset.name);
+    const applied = await (await request(`/presets/${preset.id}/apply`, "POST", { characterProfileId: 2 })).json();
+    expect(applied[0].partySize).toBe(3);
+  });
+
+  it("deletes presets without deleting or changing saved character plans", async () => {
+    const preset = await savePreset();
+    await request(`/presets/${preset.id}/apply`, "POST", { characterProfileId: 2 });
+    expect((await request(`/presets/${preset.id}`, "DELETE")).status).toBe(204);
+    expect(await (await request("/presets")).json()).toEqual([]);
+    expect((await request(`/presets/${preset.id}`, "DELETE")).status).toBe(404);
+    expect((await request(`/presets/${preset.id}/apply`, "POST", { characterProfileId: 2 })).status).toBe(404);
+    expect((await (await request("?characterProfileId=2")).json())[0]).toMatchObject({ ...entry, cleared: false });
+  });
+
+  it("isolates preset edits and deletion by account and handles missing presets", async () => {
+    const preset = await savePreset();
+    expect((await request(`/presets/${preset.id}`, "PUT", { name: "Stolen" }, 2)).status).toBe(404);
+    expect((await request(`/presets/${preset.id}`, "DELETE", undefined, 2)).status).toBe(404);
+    expect((await request("/presets/999", "PUT", { name: "Missing" })).status).toBe(404);
+    expect(await (await request("/presets")).json()).toEqual([{ id: preset.id, name: preset.name }]);
+  });
+
+  it("clears all selected bosses for only the current character and refreshes earned income", async () => {
+    await request("", "PUT", { characterProfileId: 1, ...entry, cleared: false });
+    await request("", "PUT", { characterProfileId: 1, ...entry, bossKey: "damien", tracked: false, cleared: false });
+    await request("", "PUT", { characterProfileId: 2, ...entry, cleared: false });
+    expect((await request("/clear-all", "POST", { characterProfileId: 1 })).status).toBe(200);
+    expect((await request("/clear-all", "POST", { characterProfileId: 1 })).status).toBe(200);
+    const rows = await (await request("?characterProfileId=1")).json();
+    expect(rows.find((row) => row.bossKey === "lotus")).toMatchObject({ ...entry });
+    expect(rows.find((row) => row.bossKey === "damien")).toMatchObject({ tracked: false, cleared: false });
+    expect((await (await request("?characterProfileId=2")).json())[0].cleared).toBe(false);
+    expect((await (await request("/account")).json()).weeklyCleared).toBe(200);
+    expect((await request("/clear-all", "POST", { characterProfileId: 3 })).status).toBe(404);
+    expect((await request("/clear-all", "POST", { characterProfileId: 1 }, 2)).status).toBe(404);
+    expect((await request("/clear-all", "POST", {})).status).toBe(400);
   });
 
   it("returns account totals after both weekly caps while leaving monthly crystals separate", async () => {

@@ -64,4 +64,6 @@ The Boss Income calculator saves a separate plan for each imported character, in
 
 Open **Characters → select a character → Boss tracker** to manage a plan. Named presets save the selected bosses and their settings to your account for reuse on any character; applying a preset replaces selections and retains clears only for bosses still selected. Presets never copy clears from the source character.
 
+Select a saved preset and choose **Edit preset** to rename it, or check the replacement option to overwrite its bosses and settings with the current character's selection. Edits take effect when the preset is next applied. **Delete preset** removes the template while keeping existing character plans. **Clear all planned** marks every selected boss for the current character as cleared; **Reset clears** starts tracking clears again without removing the plan.
+
 Weekly income uses each character's highest 14 personal crystal payouts after party splits. The account summary then counts the highest 180 eligible weekly payouts across all characters. Planned and cleared income are calculated separately; monthly bosses are reported separately and do not consume weekly crystal slots. Extra selected bosses remain in the tracker. Monthly projections use 4.345 weeks plus planned monthly boss income.
