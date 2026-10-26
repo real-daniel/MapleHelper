@@ -4,6 +4,7 @@ import Image from "next/image";
 import { FormEvent, useEffect, useState } from "react";
 import { UpgradeRecommendations } from "@/components/upgrade-recommendations";
 import { BossTracker } from "@/components/boss-tracker";
+import { AccountBossIncome } from "@/components/account-boss-income";
 import { apiFetch } from "@/lib/api";
 
 type Region = "NORTH_AMERICA" | "EUROPE";
@@ -91,6 +92,7 @@ export function CharacterImporter() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [characterView, setCharacterView] = useState<"overview" | "equipment" | "upgrades" | "bosses" | "manage">("overview");
+  const [bossIncomeRevision, setBossIncomeRevision] = useState(0);
 
   const selectedProfile = profiles.find((profile) => String(profile.id) === selectedProfileId) ?? null;
 
@@ -185,6 +187,7 @@ export function CharacterImporter() {
         throw new Error(body.message ?? "Delete failed.");
       }
       setProfiles((current) => current.filter((profile) => profile.id !== id));
+      setBossIncomeRevision((revision) => revision + 1);
       if (selectedProfileId === String(id)) {
         setSelectedProfileId("");
         await loadEquipment("");
@@ -344,6 +347,8 @@ export function CharacterImporter() {
 
       {message && <p className="message">{message}</p>}
 
+      <AccountBossIncome revision={bossIncomeRevision} />
+
       {characterView === "manage" ? (
         <section className="add-character-panel">
           <div className="panel-intro"><p className="eyebrow">New character</p><h2>Import from MapleStory rankings</h2><p className="muted">We’ll pull in the character portrait, class, world, and current weekly ranking.</p></div>
@@ -399,7 +404,7 @@ export function CharacterImporter() {
 
           {characterView === "upgrades" && <UpgradeRecommendations equipment={equipment} selectedProfileId={selectedProfileId} />}
 
-          {characterView === "bosses" && <BossTracker key={selectedProfile.id} profileId={selectedProfile.id} characterName={selectedProfile.name} />}
+          {characterView === "bosses" && <BossTracker key={selectedProfile.id} profileId={selectedProfile.id} characterName={selectedProfile.name} onPlanChange={() => setBossIncomeRevision((revision) => revision + 1)} />}
 
           <div className="character-footer"><span>Last synced {new Date(selectedProfile.retrievedAt).toLocaleDateString()}</span><button className="text-button danger" type="button" onClick={() => void deleteProfile(selectedProfile.id)}>Remove character</button></div>
         </>

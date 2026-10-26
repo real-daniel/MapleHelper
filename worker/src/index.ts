@@ -1,11 +1,13 @@
 import { Hono } from "hono";
 import { currentUser, beginDiscordLogin, finishDiscordLogin, issueCsrf, logout, requireAuth, requireCsrf } from "./auth";
-import { booleanValue, camelRow, errorResponse, HttpError, integerValue, asObject, stringValue } from "./http";
+import { camelRow, errorResponse, HttpError, integerValue, asObject, stringValue } from "./http";
 import { importCharacter, parseRegion } from "./nexon";
 import type { AppBindings, EquipmentSlot } from "./types";
 import { EQUIPMENT_SLOTS } from "./types";
 import { extractEquipment, extractStatEquivalencies } from "./vision";
 import { equipmentSlotCapacity, resolveEquipmentSlotIndex } from "./equipment/slots";
+import { parseBossEntry, parsePresetEntries } from "./boss-tracker";
+import { accountBossIncome, type BossPlanEntry } from "../../shared/boss-income";
 
 const app = new Hono<AppBindings>();
 
@@ -89,6 +91,66 @@ app.delete("/api/v1/profiles/:id", async (c) => {
 app.use("/api/v1/boss-tracker", requireAuth, requireCsrf);
 app.use("/api/v1/boss-tracker/*", requireAuth, requireCsrf);
 
+app.get("/api/v1/boss-tracker/account", async (c) => {
+  const rows = await c.env.DB.prepare(`SELECT character_profile_id,boss_key,boss_name,difficulty,reset_period,
+    crystal_value,party_size,tracked,cleared FROM boss_tracker_entries WHERE app_user_id=? ORDER BY character_profile_id,boss_key`)
+    .bind(currentUser(c).id).all<Record<string, unknown>>();
+  const entries = rows.results.map(publicBossEntry) as (BossPlanEntry & { characterProfileId: number })[];
+  return c.json(accountBossIncome(entries));
+});
+
+app.get("/api/v1/boss-tracker/presets", async (c) => {
+  const rows = await c.env.DB.prepare("SELECT id,name FROM boss_tracker_presets WHERE app_user_id=? ORDER BY name")
+    .bind(currentUser(c).id).all<{ id: number; name: string }>();
+  return c.json(rows.results);
+});
+
+app.post("/api/v1/boss-tracker/presets", async (c) => {
+  const body = asObject(await c.req.json());
+  const userId = currentUser(c).id;
+  const profileId = integerValue(body.characterProfileId, "characterProfileId", 1, Number.MAX_SAFE_INTEGER);
+  if (profileId == null) throw new HttpError(400, "characterProfileId is required.");
+  await profileById(c.env.DB, profileId, userId);
+  const name = stringValue(body.name, "name", 80, true)!;
+  const entries = parsePresetEntries(body.entries);
+  const result = await c.env.DB.prepare(`INSERT INTO boss_tracker_presets (app_user_id,name,entries_json,created_at)
+    VALUES (?,?,?,?) ON CONFLICT(app_user_id,name) DO NOTHING`)
+    .bind(userId, name, JSON.stringify(entries), new Date().toISOString()).run();
+  if (!result.meta.changes) throw new HttpError(409, "A preset with that name already exists. Choose another name.");
+  return c.json({ id: Number(result.meta.last_row_id), name }, 201);
+});
+
+app.post("/api/v1/boss-tracker/presets/:id/apply", async (c) => {
+  const body = asObject(await c.req.json());
+  const userId = currentUser(c).id;
+  const profileId = integerValue(body.characterProfileId, "characterProfileId", 1, Number.MAX_SAFE_INTEGER);
+  if (profileId == null) throw new HttpError(400, "characterProfileId is required.");
+  await profileById(c.env.DB, profileId, userId);
+  const preset = await c.env.DB.prepare("SELECT entries_json FROM boss_tracker_presets WHERE id=? AND app_user_id=?")
+    .bind(pathId(c.req.param("id")), userId).first<{ entries_json: string }>();
+  if (!preset) throw new HttpError(404, "Boss preset was not found.");
+  const entries = parsePresetEntries(JSON.parse(preset.entries_json));
+  const now = new Date().toISOString();
+  // Keep clears for bosses still selected; remove excluded bosses from the plan atomically.
+  await c.env.DB.batch([
+    c.env.DB.prepare(`UPDATE boss_tracker_entries SET tracked=0,cleared=0,updated_at=?
+      WHERE app_user_id=? AND character_profile_id=?
+      AND boss_key NOT IN (SELECT json_extract(value,'$.bossKey') FROM json_each(?))`)
+      .bind(now, userId, profileId, preset.entries_json),
+    ...entries.map((entry) => c.env.DB.prepare(`INSERT INTO boss_tracker_entries
+      (app_user_id,character_profile_id,boss_key,boss_name,difficulty,reset_period,crystal_value,party_size,tracked,cleared,created_at,updated_at)
+      VALUES (?,?,?,?,?,?,?,?,1,0,?,?) ON CONFLICT(app_user_id,character_profile_id,boss_key) DO UPDATE SET
+      boss_name=excluded.boss_name,difficulty=excluded.difficulty,reset_period=excluded.reset_period,
+      crystal_value=excluded.crystal_value,party_size=excluded.party_size,tracked=1,updated_at=excluded.updated_at`)
+      .bind(userId, profileId, entry.bossKey, entry.bossName, entry.difficulty, entry.resetPeriod,
+        entry.crystalValue, entry.partySize, now, now)),
+  ]);
+  const rows = await c.env.DB.prepare(`SELECT boss_key,boss_name,difficulty,reset_period,crystal_value,
+    party_size,tracked,cleared FROM boss_tracker_entries WHERE app_user_id=? AND character_profile_id=? ORDER BY boss_name`)
+    .bind(userId, profileId).all<Record<string, unknown>>();
+  return c.json(rows.results.map(publicBossEntry));
+});
+
 app.get("/api/v1/boss-tracker", async (c) => {
   const userId = currentUser(c).id;
   const profileId = pathId(c.req.query("characterProfileId") ?? "");
@@ -106,17 +168,7 @@ app.put("/api/v1/boss-tracker", async (c) => {
   const profileId = integerValue(body.characterProfileId, "characterProfileId", 1, Number.MAX_SAFE_INTEGER);
   if (profileId == null) throw new HttpError(400, "characterProfileId is required.");
   await profileById(c.env.DB, profileId, userId);
-  const bossKey = stringValue(body.bossKey, "bossKey", 80, true)!;
-  if (!/^[a-z0-9-]+$/.test(bossKey)) throw new HttpError(400, "bossKey is invalid.");
-  const bossName = stringValue(body.bossName, "bossName", 80, true)!;
-  const difficulty = stringValue(body.difficulty, "difficulty", 30, true)!;
-  const resetPeriod = body.resetPeriod;
-  if (resetPeriod !== "WEEKLY" && resetPeriod !== "MONTHLY") throw new HttpError(400, "resetPeriod is invalid.");
-  const crystalValue = integerValue(body.crystalValue, "crystalValue", 0, 100_000_000_000);
-  const partySize = integerValue(body.partySize, "partySize", 1, 6);
-  if (crystalValue == null || partySize == null) throw new HttpError(400, "crystalValue and partySize are required.");
-  const tracked = booleanValue(body.tracked, "tracked");
-  const cleared = booleanValue(body.cleared, "cleared") && tracked;
+  const { bossKey, bossName, difficulty, resetPeriod, crystalValue, partySize, tracked, cleared } = parseBossEntry(body);
   const now = new Date().toISOString();
   await c.env.DB.prepare(`INSERT INTO boss_tracker_entries
     (app_user_id,character_profile_id,boss_key,boss_name,difficulty,reset_period,crystal_value,party_size,tracked,cleared,created_at,updated_at)

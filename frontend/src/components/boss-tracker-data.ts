@@ -1,4 +1,5 @@
 export type ResetPeriod = "WEEKLY" | "MONTHLY";
+export { personalCrystalIncome } from "../../../shared/boss-income";
 
 export type BossDifficulty = { name: string; crystalValue: number };
 export type BossDefinition = {
@@ -41,10 +42,6 @@ export const BOSSES: BossDefinition[] = [
   { key: "jupiter", name: "Jupiter", period: "WEEKLY", difficulties: [{ name: "Normal", crystalValue: 2_970_000_000 }, { name: "Hard", crystalValue: 5_950_000_000 }] },
   { key: "black-mage", name: "Black Mage", period: "MONTHLY", difficulties: [{ name: "Hard", crystalValue: 4_500_000_000 }, { name: "Extreme", crystalValue: 18_000_000_000 }] },
 ];
-
-export function personalCrystalIncome(crystalValue: number, partySize: number) {
-  return Math.floor(Math.max(0, crystalValue) / Math.min(6, Math.max(1, partySize)));
-}
 
 export function formatMeso(value: number) {
   if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(value >= 10_000_000_000 ? 1 : 2)}b`;
