@@ -215,7 +215,7 @@ export function CharacterImporter() {
           )}
 
           {characterView === "equipment" && (
-            <EquipmentManager profileId={selectedProfile.id} equipment={equipment} onChange={setEquipment} onMessage={setMessage} />
+            <EquipmentManager profileId={selectedProfile.id} characterName={selectedProfile.name} characterImageUrl={selectedProfile.imageUrl} equipment={equipment} onChange={setEquipment} onMessage={setMessage} />
           )}
 
           {characterView === "upgrades" && <UpgradeRecommendations equipment={equipment} selectedProfileId={selectedProfileId} />}

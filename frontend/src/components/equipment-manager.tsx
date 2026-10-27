@@ -1,7 +1,9 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { potentialLineOptions, supportsPotential } from "@/components/potential-lines";
 
 export type EquipmentSlot =
   | "RING" | "PENDANT" | "WEAPON" | "SECONDARY" | "EMBLEM"
@@ -63,11 +65,15 @@ function slot(key: string, equipmentSlot: EquipmentSlot, slotIndex: number | nul
 
 export function EquipmentManager({
   profileId,
+  characterName,
+  characterImageUrl,
   equipment,
   onChange,
   onMessage,
 }: {
   profileId: number;
+  characterName: string;
+  characterImageUrl: string | null;
   equipment: EquipmentItem[];
   onChange: (equipment: EquipmentItem[]) => void;
   onMessage: (message: string) => void;
@@ -110,6 +116,29 @@ export function EquipmentManager({
       name,
       levelRequirement: item?.levelRequirement ?? current.levelRequirement,
     } : current);
+  }
+
+  function updateFlameStat(stat: string, value: string) {
+    if (!draft) return;
+    const values = parseFlameStats(draft.flameStats);
+    if (value === "") values.delete(stat);
+    else values.set(stat, Number(value));
+    update("flameStats", formatFlameStats(values));
+  }
+
+  function updateDisplayedStat(stat: string, value: string) {
+    if (!draft) return;
+    const values = parseFlameStats(draft.statLines);
+    if (value === "") values.delete(stat);
+    else values.set(stat, Number(value));
+    update("statLines", [...values].map(([name, amount]) => `${name}: +${amount}`).join("\n"));
+  }
+
+  function updatePotentialLine(index: number, value: string) {
+    if (!draft) return;
+    const lines = parsePotentialLines(draft.potentialLines);
+    lines[index] = value;
+    update("potentialLines", lines.filter(Boolean).join("\n"));
   }
 
   async function saveEquipment() {
@@ -167,11 +196,15 @@ export function EquipmentManager({
           <span className="muted">{equipment.length} / {SLOT_DEFINITIONS.length}</span>
         </div>
         <div className="equipment-slot-grid" aria-label="Equipment slots">
+          <div className="equipment-character">
+            {characterImageUrl ? <Image src={characterImageUrl} alt="" width={180} height={180} unoptimized /> : <span>{characterName.slice(0, 1)}</span>}
+            <strong>{characterName}</strong>
+          </div>
           {SLOT_DEFINITIONS.map((definition) => {
             const item = findEquipment(equipment, definition);
             return (
               <button
-                className="equipment-slot"
+                className={`equipment-slot equipment-slot-${definition.key}`}
                 type="button"
                 key={definition.key}
                 aria-pressed={selectedSlot?.key === definition.key}
@@ -209,24 +242,28 @@ export function EquipmentManager({
 
               <details open>
                 <summary>Flame</summary>
-                <label>Bonus stats<textarea value={draft.flameStats} onChange={(event) => update("flameStats", event.target.value)} placeholder="STR: +40&#10;All Stat: +6%" /></label>
+                <div className="flame-field-grid">
+                  {flameFields(draft.slot).map((field) => <label key={field.key}>{field.label}<input type="number" min={0} value={parseFlameStats(draft.flameStats).get(field.key) ?? ""} onChange={(event) => updateFlameStat(field.key, event.target.value)} /></label>)}
+                </div>
               </details>
 
-              <details open>
+              {supportsPotential(draft.slot) && <details open>
                 <summary>Potential</summary>
-                <label>Tier<select value={draft.potentialTier} onChange={(event) => update("potentialTier", event.target.value)}>{potentialTierOptions()}</select></label>
-                <label>Lines<textarea value={draft.potentialLines} onChange={(event) => update("potentialLines", event.target.value)} placeholder="STR: +12%" /></label>
-              </details>
-
-              <details>
-                <summary>Bonus potential</summary>
-                <label>Tier<select value={draft.bonusPotentialTier} onChange={(event) => update("bonusPotentialTier", event.target.value)}>{potentialTierOptions()}</select></label>
-                <label>Lines<textarea value={draft.bonusPotentialLines} onChange={(event) => update("bonusPotentialLines", event.target.value)} /></label>
-              </details>
+                <label>Tier<select value={draft.potentialTier} onChange={(event) => { update("potentialTier", event.target.value); update("potentialLines", ""); }}>{potentialTierOptions()}</select></label>
+                <div className="potential-line-list">
+                  {[0, 1, 2].map((index) => {
+                    const current = parsePotentialLines(draft.potentialLines)[index] ?? "";
+                    const options = potentialLineOptions(draft.slot, draft.potentialTier, index);
+                    return <label key={index}>Line {index + 1}<select value={current} disabled={!draft.potentialTier} onChange={(event) => updatePotentialLine(index, event.target.value)}><option value="">None</option>{current && !options.includes(current) && <option value={current}>{current}</option>}{options.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>;
+                  })}
+                </div>
+              </details>}
 
               <details>
                 <summary>Additional stats</summary>
-                <label>Displayed stats<textarea value={draft.statLines} onChange={(event) => update("statLines", event.target.value)} /></label>
+                <div className="flame-field-grid">
+                  {BASE_ITEM_STAT_FIELDS.map((field) => <label key={field.key}>{field.label}<input type="number" min={0} value={parseFlameStats(draft.statLines).get(field.key) ?? ""} onChange={(event) => updateDisplayedStat(field.key, event.target.value)} /></label>)}
+                </div>
               </details>
 
               <button className="primary-button" type="button" disabled={saving || !draft.name.trim()} onClick={() => void saveEquipment()}>{saving ? "Saving…" : "Save equipment"}</button>
@@ -240,6 +277,42 @@ export function EquipmentManager({
 
 function potentialTierOptions() {
   return <><option value="">None</option><option>Rare</option><option>Epic</option><option>Unique</option><option>Legendary</option></>;
+}
+
+const BASE_FLAME_FIELDS = [
+  { key: "STR", label: "STR" },
+  { key: "DEX", label: "DEX" },
+  { key: "INT", label: "INT" },
+  { key: "LUK", label: "LUK" },
+  { key: "Max HP", label: "Max HP" },
+  { key: "All Stat", label: "All Stat %" },
+  { key: "Attack Power", label: "ATT" },
+  { key: "Magic Attack", label: "M. ATT" },
+];
+
+const BASE_ITEM_STAT_FIELDS = BASE_FLAME_FIELDS.filter((field) => field.key !== "All Stat");
+
+function flameFields(slot: EquipmentSlot) {
+  return slot === "WEAPON"
+    ? [...BASE_FLAME_FIELDS, { key: "Boss Damage", label: "Boss %" }, { key: "Damage", label: "Damage %" }]
+    : BASE_FLAME_FIELDS;
+}
+
+function parseFlameStats(text: string) {
+  const values = new Map<string, number>();
+  for (const line of text.split(/\r?\n/)) {
+    const match = line.match(/^(.+?):\s*\+?(-?\d+)/);
+    if (match) values.set(match[1].trim(), Number(match[2]));
+  }
+  return values;
+}
+
+function formatFlameStats(values: Map<string, number>) {
+  return [...values].map(([stat, value]) => `${stat}: +${value}${["All Stat", "Boss Damage", "Damage"].includes(stat) ? "%" : ""}`).join("\n");
+}
+
+function parsePotentialLines(text: string) {
+  return text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(0, 3);
 }
 
 function emptyDraft(definition: SlotDefinition): EquipmentDraft {
