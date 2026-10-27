@@ -5,6 +5,8 @@ import { FormEvent, useEffect, useState } from "react";
 import { UpgradeRecommendations } from "@/components/upgrade-recommendations";
 import { BossTracker } from "@/components/boss-tracker";
 import { AccountBossIncome } from "@/components/account-boss-income";
+import { StatEquivalencyOcr } from "@/components/stat-equivalency-ocr";
+import { EquipmentManager, type EquipmentItem } from "@/components/equipment-manager";
 import { apiFetch } from "@/lib/api";
 
 type Region = "NORTH_AMERICA" | "EUROPE";
@@ -27,58 +29,6 @@ type CharacterProfile = ImportedCharacter & {
   updatedAt: string;
 };
 
-type EquipmentSlot =
-  | "RING" | "PENDANT"
-  | "WEAPON" | "SECONDARY" | "EMBLEM"
-  | "HAT" | "FACE" | "EYE" | "EARRINGS"
-  | "TOP" | "BOTTOM" | "SHOES" | "GLOVES" | "CAPE"
-  | "BELT" | "SHOULDER" | "POCKET" | "BADGE" | "MEDAL"
-  | "ANDROID" | "HEART"
-  | "TOTEM";
-
-type EquipmentDraft = {
-  originalFilename: string;
-  imageBytes: number;
-  slot: EquipmentSlot;
-  slotIndex: number | null;
-  name: string;
-  levelRequirement: number | null;
-  starForce: number | null;
-  statLines: string;
-  flameStats: string;
-  flameScoreLines: string;
-  potentialTier: string;
-  potentialLines: string;
-  bonusPotentialTier: string;
-  bonusPotentialLines: string;
-  rawExtractedText: string;
-  extractionStatus: string;
-  extractionNotes: string;
-};
-
-type EquipmentItem = Omit<EquipmentDraft, "originalFilename" | "imageBytes" | "extractionStatus" | "extractionNotes"> & {
-  id: number;
-  characterProfileId: number | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-const EQUIPMENT_SLOTS: EquipmentSlot[] = [
-  "RING", "PENDANT",
-  "WEAPON", "SECONDARY", "EMBLEM",
-  "HAT", "FACE", "EYE", "EARRINGS",
-  "TOP", "BOTTOM", "SHOES", "GLOVES", "CAPE",
-  "BELT", "SHOULDER", "POCKET", "BADGE", "MEDAL",
-  "ANDROID", "HEART",
-  "TOTEM",
-];
-
-const SLOT_CAPACITY: Partial<Record<EquipmentSlot, number>> = {
-  RING: 4,
-  PENDANT: 2,
-  TOTEM: 3,
-};
-
 export function CharacterImporter() {
   const [name, setName] = useState("");
   const [region, setRegion] = useState<Region>("NORTH_AMERICA");
@@ -86,12 +36,9 @@ export function CharacterImporter() {
   const [profiles, setProfiles] = useState<CharacterProfile[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState("");
   const [equipment, setEquipment] = useState<EquipmentItem[]>([]);
-  const [equipmentFile, setEquipmentFile] = useState<File | null>(null);
-  const [equipmentPreviewUrl, setEquipmentPreviewUrl] = useState("");
-  const [equipmentDraft, setEquipmentDraft] = useState<EquipmentDraft | null>(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
-  const [characterView, setCharacterView] = useState<"overview" | "equipment" | "upgrades" | "bosses" | "manage">("overview");
+  const [characterView, setCharacterView] = useState<"overview" | "equipment" | "stats" | "upgrades" | "bosses" | "manage">("overview");
   const [bossIncomeRevision, setBossIncomeRevision] = useState(0);
 
   const selectedProfile = profiles.find((profile) => String(profile.id) === selectedProfileId) ?? null;
@@ -197,127 +144,6 @@ export function CharacterImporter() {
     }
   }
 
-  async function extractEquipment(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!equipmentFile) {
-      setMessage("Choose an equipment screenshot first.");
-      return;
-    }
-
-    setLoading(true);
-    setMessage("");
-    setEquipmentDraft(null);
-
-    try {
-      const formData = new FormData();
-      formData.append("file", equipmentFile);
-      const response = await apiFetch("/api/v1/equipment/extract", {
-        method: "POST",
-        body: formData,
-      });
-      const body = await readBody(response);
-      if (!response.ok) throw new Error(body.message ?? "Equipment extraction failed.");
-      setEquipmentDraft(body as EquipmentDraft);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Equipment extraction failed.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function handleEquipmentPaste(event: React.ClipboardEvent<HTMLDivElement>) {
-    const image = Array.from(event.clipboardData.items)
-      .find((item) => item.kind === "file" && item.type.startsWith("image/"));
-
-    if (!image) {
-      setMessage("Clipboard did not contain an image. Copy a screenshot, then paste it into the box.");
-      return;
-    }
-
-    const file = image.getAsFile();
-    if (!file) {
-      setMessage("Could not read the pasted image.");
-      return;
-    }
-
-    const extension = file.type.split("/")[1] || "png";
-    const pastedFile = new File([file], `equipment-screenshot.${extension}`, { type: file.type });
-    setEquipmentFile(pastedFile);
-    setEquipmentDraft(null);
-    setMessage(`Pasted ${pastedFile.name} (${pastedFile.size.toLocaleString()} bytes).`);
-
-    if (equipmentPreviewUrl) {
-      URL.revokeObjectURL(equipmentPreviewUrl);
-    }
-    setEquipmentPreviewUrl(URL.createObjectURL(pastedFile));
-  }
-
-  async function confirmEquipment(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!equipmentDraft) return;
-
-    setLoading(true);
-    setMessage("");
-    try {
-      const response = await apiFetch("/api/v1/equipment", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          characterProfileId: selectedProfileId ? Number(selectedProfileId) : null,
-          slot: equipmentDraft.slot,
-          slotIndex: equipmentDraft.slotIndex,
-          name: equipmentDraft.name,
-          levelRequirement: equipmentDraft.levelRequirement,
-          starForce: equipmentDraft.starForce,
-          statLines: equipmentDraft.statLines,
-          flameStats: equipmentDraft.flameStats,
-          flameScoreLines: equipmentDraft.flameScoreLines,
-          potentialTier: equipmentDraft.potentialTier,
-          potentialLines: equipmentDraft.potentialLines,
-          bonusPotentialTier: equipmentDraft.bonusPotentialTier,
-          bonusPotentialLines: equipmentDraft.bonusPotentialLines,
-          rawExtractedText: equipmentDraft.rawExtractedText,
-        }),
-      });
-      const body = await readBody(response);
-      if (!response.ok) throw new Error(body.message ?? "Equipment save failed.");
-      setEquipmentDraft(null);
-      setEquipmentFile(null);
-      await loadEquipment();
-      setMessage(`Saved ${(body as EquipmentItem).name}.`);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Equipment save failed.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function deleteEquipment(id: number) {
-    setMessage("");
-    try {
-      const response = await apiFetch(`/api/v1/equipment/${id}`, { method: "DELETE" });
-      if (!response.ok) {
-        const body = await readBody(response);
-        throw new Error(body.message ?? "Equipment delete failed.");
-      }
-      setEquipment((current) => current.filter((item) => item.id !== id));
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Equipment delete failed.");
-    }
-  }
-
-  function updateDraft<Key extends keyof EquipmentDraft>(key: Key, value: EquipmentDraft[Key]) {
-    setEquipmentDraft((current) => current ? { ...current, [key]: value } : current);
-  }
-
-  function updateDraftSlot(slot: EquipmentSlot) {
-    setEquipmentDraft((current) => {
-      if (!current) return current;
-      const capacity = SLOT_CAPACITY[slot] ?? 1;
-      return { ...current, slot, slotIndex: capacity > 1 ? clampSlotIndex(current.slotIndex, capacity) : null };
-    });
-  }
-
   return (
     <main className="character-workspace">
       <div className="workspace-heading">
@@ -374,7 +200,7 @@ export function CharacterImporter() {
           </section>
 
           <nav className="character-nav" aria-label={`${selectedProfile.name} sections`}>
-            {(["overview", "equipment", "upgrades", "bosses"] as const).map((view) => <button type="button" key={view} aria-pressed={characterView === view} onClick={() => setCharacterView(view)}>{view === "upgrades" ? "Upgrade plan" : view === "bosses" ? "Boss tracker" : view[0].toUpperCase() + view.slice(1)}</button>)}
+            {(["overview", "equipment", "stats", "upgrades", "bosses"] as const).map((view) => <button type="button" key={view} aria-pressed={characterView === view} onClick={() => setCharacterView(view)}>{view === "stats" ? "Stat equivalency" : view === "upgrades" ? "Upgrade plan" : view === "bosses" ? "Boss tracker" : view[0].toUpperCase() + view.slice(1)}</button>)}
           </nav>
 
           {characterView === "overview" && (
@@ -389,20 +215,12 @@ export function CharacterImporter() {
           )}
 
           {characterView === "equipment" && (
-            <div className="equipment-layout">
-              <section>
-                <div className="section-heading"><h2>Saved gear</h2><span className="count-badge">{equipment.length}</span></div>
-                {equipment.length === 0 ? <div className="empty-state"><strong>No equipment saved yet</strong><p>Paste your first item screenshot to start building this character’s loadout.</p></div> : <div className="table-scroll"><table><thead><tr><th>Slot</th><th>Item</th><th>Stars</th><th>Potential</th><th /></tr></thead><tbody>{equipment.map((item) => <tr key={item.id}><td><span className="slot-label">{formatEquipmentSlot(item)}</span></td><td><strong>{item.name}</strong></td><td>{item.starForce ?? "—"}</td><td>{item.potentialTier || "—"}</td><td><button className="text-button danger" type="button" onClick={() => void deleteEquipment(item.id)}>Remove</button></td></tr>)}</tbody></table></div>}
-              </section>
-              <section className="capture-panel">
-                <h2>Add gear</h2>
-                <form onSubmit={extractEquipment}><div className="paste-box" role="button" tabIndex={0} onPaste={handleEquipmentPaste}><strong>{equipmentFile ? "Screenshot ready" : "Press Ctrl + V to paste"}</strong><span>{equipmentFile ? equipmentFile.name : "Click here first, then paste an image"}</span>{equipmentPreviewUrl && <Image src={equipmentPreviewUrl} alt="Equipment screenshot preview" width={520} height={260} unoptimized />}</div><button className="primary-button" disabled={loading || !equipmentFile} type="submit">{loading ? "Reading item..." : "Extract item"}</button></form>
-                {equipmentDraft && <form className="review-form" onSubmit={confirmEquipment}><h3>Review extracted item</h3><p className="message">{equipmentDraft.extractionNotes}</p><label>Slot<select value={equipmentDraft.slot} onChange={(event) => updateDraftSlot(event.target.value as EquipmentSlot)}>{EQUIPMENT_SLOTS.map((slot) => <option key={slot} value={slot}>{slot}</option>)}</select></label>{(SLOT_CAPACITY[equipmentDraft.slot] ?? 1) > 1 && <label>Position<select value={equipmentDraft.slotIndex ?? 1} onChange={(event) => updateDraft("slotIndex", Number(event.target.value))}>{Array.from({ length: SLOT_CAPACITY[equipmentDraft.slot] ?? 1 }, (_, index) => index + 1).map((index) => <option key={index}>{index}</option>)}</select></label>}<label>Item name<input value={equipmentDraft.name} onChange={(event) => updateDraft("name", event.target.value)} required /></label><label>Star Force<input type="number" min={0} max={25} value={equipmentDraft.starForce ?? ""} onChange={(event) => updateDraft("starForce", nullableNumber(event.target.value))} /></label><label>Potential tier<input value={equipmentDraft.potentialTier} onChange={(event) => updateDraft("potentialTier", event.target.value)} /></label><label>Potential lines<textarea value={equipmentDraft.potentialLines} onChange={(event) => updateDraft("potentialLines", event.target.value)} /></label><button className="primary-button" disabled={loading || !equipmentDraft.name.trim()} type="submit">Save equipment</button></form>}
-              </section>
-            </div>
+            <EquipmentManager profileId={selectedProfile.id} equipment={equipment} onChange={setEquipment} onMessage={setMessage} />
           )}
 
           {characterView === "upgrades" && <UpgradeRecommendations equipment={equipment} selectedProfileId={selectedProfileId} />}
+
+          {characterView === "stats" && <StatEquivalencyOcr key={selectedProfile.id} characterName={selectedProfile.name} />}
 
           {characterView === "bosses" && <BossTracker key={selectedProfile.id} profileId={selectedProfile.id} characterName={selectedProfile.name} onPlanChange={() => setBossIncomeRevision((revision) => revision + 1)} />}
 
@@ -418,19 +236,6 @@ export function CharacterImporter() {
 async function readBody(response: Response) {
   const text = await response.text();
   return text ? JSON.parse(text) : {};
-}
-
-function nullableNumber(value: string) {
-  return value === "" ? null : Number(value);
-}
-
-function clampSlotIndex(value: number | null, capacity: number) {
-  if (value == null || value < 1 || value > capacity) return 1;
-  return value;
-}
-
-function formatEquipmentSlot(item: { slot: EquipmentSlot; slotIndex: number | null }) {
-  return item.slotIndex == null ? item.slot : `${item.slot} ${item.slotIndex}`;
 }
 
 function formatCompactNumber(value: number) {

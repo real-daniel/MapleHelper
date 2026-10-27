@@ -250,8 +250,16 @@ app.get("/api/v1/equipment", async (c) => {
 app.get("/api/v1/equipment/catalog", async (c) => {
   const slot = c.req.query("slot");
   if (slot && !EQUIPMENT_SLOTS.includes(slot as EquipmentSlot)) throw new HttpError(400, "Invalid equipment slot.");
-  const statement = slot
-    ? c.env.DB.prepare("SELECT * FROM equipment_catalog_items WHERE slot=? ORDER BY level_requirement, name").bind(slot)
+  const slotIndex = Number(c.req.query("slotIndex"));
+  const indexedSlot = slot === "RING" && Number.isInteger(slotIndex) && slotIndex >= 1 && slotIndex <= 4
+    ? `RING_${slotIndex}`
+    : slot === "PENDANT" && Number.isInteger(slotIndex) && slotIndex >= 1 && slotIndex <= 2
+      ? `PENDANT_${slotIndex}`
+      : null;
+  const statement = slot && indexedSlot
+    ? c.env.DB.prepare("SELECT * FROM equipment_catalog_items WHERE slot IN (?,?) ORDER BY level_requirement, name").bind(slot, indexedSlot)
+    : slot
+      ? c.env.DB.prepare("SELECT * FROM equipment_catalog_items WHERE slot=? ORDER BY level_requirement, name").bind(slot)
     : c.env.DB.prepare("SELECT * FROM equipment_catalog_items ORDER BY slot, level_requirement, name");
   const rows = await statement.all<Record<string, unknown>>();
   return c.json(rows.results.map((row) => ({ ...camelRow(row), namePattern: Boolean(row.name_pattern) })));

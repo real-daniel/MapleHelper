@@ -17,7 +17,7 @@ type CharacterStatEquivalencyExtraction = {
   extractionNotes: string;
 };
 
-export function StatEquivalencyOcr() {
+export function StatEquivalencyOcr({ characterName }: { characterName: string }) {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [result, setResult] = useState<CharacterStatEquivalencyExtraction | null>(null);
@@ -80,13 +80,13 @@ export function StatEquivalencyOcr() {
   }
 
   return (
-    <main>
-      <h1>Stat Equivalency OCR</h1>
-      <p className="muted">Paste the final-damage equivalency table from your character stats.</p>
-
-      {message && <p className="message">{message}</p>}
-
+    <div className="stat-equivalency-tool" aria-label={`${characterName} stat equivalency OCR`}>
       <section>
+        <h2>Stat equivalency</h2>
+        <p className="muted">Paste {characterName}&apos;s final-damage equivalency table.</p>
+
+        {message && <p className="message">{message}</p>}
+
         <form onSubmit={extract}>
           <div
             className="paste-box"
@@ -105,7 +105,7 @@ export function StatEquivalencyOcr() {
             {/* eslint-disable-next-line @next/next/no-img-element -- Blob preview from a pasted local clipboard image. */}
             {previewUrl && <img src={previewUrl} alt="Pasted stat equivalency screenshot preview" />}
           </div>
-          <button disabled={loading || !file} type="submit">{loading ? "Working..." : "Upload + extract"}</button>
+          <button className="primary-button" disabled={loading || !file} type="submit">{loading ? "Working..." : "Extract"}</button>
         </form>
       </section>
 
@@ -136,7 +136,7 @@ export function StatEquivalencyOcr() {
           <label className="full-width-field">Raw OCR text<textarea readOnly value={result.rawText} /></label>
         </section>
       )}
-    </main>
+    </div>
   );
 }
 
