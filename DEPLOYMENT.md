@@ -39,6 +39,8 @@ npm run db:migrate:preview
 
 The shared preview database is isolated from production but is shared by all Worker preview versions. Do not store production data in it.
 
+Boss presets require migration `0005_boss_presets.sql`. Apply migrations to the target database before deploying code that uses presets. Account income uses the existing per-character boss entries; it does not require a separate account-income table.
+
 ## 3. Configure Discord
 
 In the Discord Developer Portal, add this redirect URI, replacing the hostname after the first deployment if you use a custom domain:
