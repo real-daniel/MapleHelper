@@ -603,7 +603,10 @@ dd {
 .segmented button[aria-pressed="true"] { background: #fff; color: #1c5f3b; box-shadow: 0 1px 3px #1b211d1c; }
 .boss-table th { border-top: 0; color: #6b746d; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
 .boss-table td { height: 59px; padding: 9px 8px; border-top-color: #e7ebe7; }
-.boss-table td:nth-child(2) { min-width: 160px; }
+.boss-table td:nth-child(2) { min-width: 220px; }
+.boss-identity-cell { display: flex; align-items: center; gap: 10px; }
+.boss-identity-cell > div { min-width: 0; }
+.boss-portrait { flex: 0 0 auto; width: 48px; height: 48px; border: 1px solid #d9dfda; border-radius: 9px; background: #eef1ed; object-fit: cover; object-position: center 24%; box-shadow: 0 1px 2px rgb(26 45 33 / 12%); }
 .boss-table select { min-width: 92px; }
 .boss-table input[type="checkbox"] { width: 17px; height: 17px; accent-color: #207348; }
 .boss-table .meso-input { width: 140px; }

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { BOSSES, formatMeso, personalCrystalIncome, type ResetPeriod } from "@/components/boss-tracker-data";
@@ -297,7 +298,7 @@ export function BossTracker({ profileId, characterName, onPlanChange }: { profil
             setDeletePresetId(null);
             setPresetEditor({ ...selectedPreset, replaceSelection: false });
           }}>Edit preset</button>
-          <button className="text-button danger" type="button" disabled={saving !== null || !selectedPreset} onClick={() => {
+          <button className="secondary-button danger" type="button" disabled={saving !== null || !selectedPreset} onClick={() => {
             if (!selectedPreset) return;
             setPresetEditor(null);
             setDeletePresetId(selectedPreset.id);
@@ -340,7 +341,10 @@ export function BossTracker({ profileId, characterName, onPlanChange }: { profil
                 const boss = BOSSES.find((item) => item.key === row.bossKey)!;
                 return <tr key={row.bossKey} className={row.cleared ? "is-cleared" : ""}>
                   <td><input aria-label={`Plan ${row.bossName}`} type="checkbox" checked={row.tracked} disabled={saving !== null} onChange={(event) => void updateRow(row.bossKey, { tracked: event.target.checked })} /></td>
-                  <td><strong>{row.bossName}</strong>{row.resetPeriod === "MONTHLY" && <span className="period-pill">Monthly</span>}{row.tracked && row.resetPeriod === "WEEKLY" && !countedKeys.has(row.bossKey) && <small className="boss-limit-note">Outside top 14 plan</small>}</td>
+                  <td><div className="boss-identity-cell">
+                    <Image className="boss-portrait" src={`/bosses/${row.bossKey}.png`} alt="" width={48} height={57} />
+                    <div><strong>{row.bossName}</strong>{row.resetPeriod === "MONTHLY" && <span className="period-pill">Monthly</span>}{row.tracked && row.resetPeriod === "WEEKLY" && !countedKeys.has(row.bossKey) && <small className="boss-limit-note">Outside top 14 plan</small>}</div>
+                  </div></td>
                   <td><select aria-label={`${row.bossName} difficulty`} value={row.difficulty} disabled={!row.tracked || saving !== null} onChange={(event) => {
                     const selected = boss.difficulties.find((difficulty) => difficulty.name === event.target.value)!;
                     void updateRow(row.bossKey, { difficulty: selected.name, crystalValue: selected.crystalValue });
