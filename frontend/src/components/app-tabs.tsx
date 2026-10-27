@@ -32,8 +32,7 @@ export function AppTabs() {
       {activeArea === "calculators" && (
         <div className="module-layout">
           <aside className="module-sidebar">
-            <p className="eyebrow">Calculators</p><h2>Plan your gains</h2>
-            <p className="muted">Compare costs and outcomes before spending your resources.</p>
+            <h2>Calculators</h2>
             <nav className="side-nav" aria-label="Calculators">
               <button type="button" aria-pressed={activeCalculator === "star-force"} onClick={() => setActiveCalculator("star-force")}>Star Force</button>
               <button type="button" aria-pressed={activeCalculator === "cube"} onClick={() => setActiveCalculator("cube")}>Cubing</button>
@@ -50,8 +49,7 @@ export function AppTabs() {
       {activeArea === "tools" && (
         <div className="module-layout">
           <aside className="module-sidebar">
-            <p className="eyebrow">Tools</p><h2>Quick utilities</h2>
-            <p className="muted">Useful tools that work across your account.</p>
+            <h2>Tools</h2>
             <nav className="side-nav" aria-label="Tools"><button type="button" aria-pressed="true">Stat Equivalency OCR</button></nav>
           </aside>
           <div className="module-content"><StatEquivalencyOcr /></div>
