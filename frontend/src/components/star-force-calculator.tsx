@@ -162,7 +162,7 @@ export function StarForceCalculator() {
         <h2>Enhancement modes</h2>
         <p>Modes trade higher meso cost for a lower destruction chance.</p>
         <div className="table-scroll">
-          <table>
+          <table className="enhancement-mode-table">
             <thead><tr><th>Attempt</th>{[1, 2, 3, 4].map((mode) => <th key={mode}>Mode {mode}</th>)}</tr></thead>
             <tbody>
             {Object.entries(MODES).map(([starText, options]) => {
@@ -170,8 +170,9 @@ export function StarForceCalculator() {
               const disabled = star < firstModeStar || star >= target;
               return <tr key={star}>
                 <th>{star}★ → {star + 1}★</th>
-                {options.map(([multiplier, success, boom], index) => <td key={index}><button type="button" disabled={disabled} aria-pressed={modes[star] === index + 1} onClick={() => setModes({ ...modes, [star]: (index + 1) as StarForceMode })}>
-                  {(success * 100).toFixed(success * 100 % 1 ? 1 : 0)}% success / {(boom * 100).toFixed(boom * 100 % 1 ? 2 : 0)}% destroy / ×{multiplier} cost
+                {options.map(([multiplier, success, boom], index) => <td key={index}><button className="enhancement-mode" type="button" disabled={disabled} aria-pressed={modes[star] === index + 1} onClick={() => setModes({ ...modes, [star]: (index + 1) as StarForceMode })}>
+                  <span>{(success * 100).toFixed(success * 100 % 1 ? 1 : 0)}% success / {(boom * 100).toFixed(boom * 100 % 1 ? 2 : 0)}% destroy / ×{multiplier} cost</span>
+                  <strong className="selected-mode-label" aria-hidden="true">✓ Selected</strong>
                 </button></td>)}
               </tr>;
             })}

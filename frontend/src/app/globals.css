@@ -139,6 +139,24 @@ th { color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: .03
 .table-scroll { overflow-x: auto; }
 .table-scroll table { min-width: 760px; }
 .table-scroll button { width: 100%; }
+.enhancement-mode-table td { min-width: 190px; padding: 6px; }
+.enhancement-mode {
+  display: grid;
+  min-height: 66px;
+  align-content: center;
+  gap: 5px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  text-align: left;
+}
+.enhancement-mode:not(:disabled):hover { border-color: var(--border-strong); background: var(--surface-hover); color: var(--text); }
+.enhancement-mode[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+.enhancement-mode[aria-pressed="true"]:disabled { opacity: .72; }
+.selected-mode-label { display: none; color: var(--accent); font-size: 11px; font-weight: 650; }
+.enhancement-mode[aria-pressed="true"] .selected-mode-label { display: block; }
 dl { display: grid; grid-template-columns: 190px 1fr; gap: 8px; }
 dt { font-weight: 650; }
 dd { margin: 0; }
