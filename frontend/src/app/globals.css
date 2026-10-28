@@ -205,19 +205,19 @@ dd { margin: 0; }
 .equipment-manager { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(300px, .75fr); gap: 12px; margin-top: 12px; align-items: start; }
 .equipment-manager > section { margin: 0; }
 .equipment-slots-panel { min-width: 0; }
-.equipment-slot-grid { position: relative; width: min(100%, 520px); aspect-ratio: 313 / 300; margin: 16px auto 0; overflow: hidden; border-radius: 5px; }
-.equipment-window-image { position: absolute; left: -7.348%; top: -33.333%; width: 115.974%; height: 147.333%; max-width: none; user-select: none; }
-.equipment-character { position: absolute; z-index: 1; left: 29.073%; top: .333%; width: 42.173%; height: 58.667%; display: grid; place-items: center; overflow: hidden; background: #fff; }
+.equipment-slot-grid { position: relative; width: min(100%, 520px); aspect-ratio: 329 / 316; margin: 16px auto 0; overflow: hidden; border-radius: 7px; }
+.equipment-window-image { position: absolute; left: -4.559%; top: -29.114%; width: 110.334%; height: 139.873%; max-width: none; user-select: none; }
+.equipment-character { position: absolute; z-index: 1; left: 30.091%; top: 2.848%; width: 40.122%; height: 55.696%; display: grid; place-items: center; overflow: hidden; background: #fff; }
 .equipment-character img { width: 100%; height: 100%; object-fit: contain; }
 .equipment-character > span { display: grid; width: 64px; height: 64px; place-items: center; border: 1px solid #c6c6c6; border-radius: 50%; color: #229eb4; font-size: 24px; }
-.equipment-slot { position: absolute; z-index: 2; left: var(--slot-x); top: var(--slot-y); width: 13.099%; height: 13.667%; padding: 0; border: 2px solid transparent; border-radius: 5px; background: transparent; color: #fff; }
+.equipment-slot { position: absolute; z-index: 2; left: var(--slot-x); top: var(--slot-y); width: 12.462%; height: 12.975%; padding: 0; border: 2px solid transparent; border-radius: 5px; background: transparent; color: #fff; }
 .equipment-slot:hover { border-color: rgba(255, 255, 255, .9); background: rgba(55, 196, 218, .14); }
 .equipment-slot:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
 .equipment-slot[aria-pressed="true"] { border-color: #24d8f2; background: rgba(31, 190, 215, .32); box-shadow: 0 0 0 1px rgba(0, 70, 82, .85), 0 0 10px rgba(36, 216, 242, .75); }
 .equipment-slot-occupied { position: absolute; top: 3px; right: 3px; width: 7px; height: 7px; border: 1px solid #fff; border-radius: 50%; background: #24d8f2; box-shadow: 0 1px 3px rgba(0, 0, 0, .65); }
 .equipment-slot > small { position: absolute; right: 2px; bottom: 1px; padding: 1px 2px; border-radius: 2px; background: rgba(20, 31, 36, .82); color: #fff; font-family: var(--font-geist-mono), monospace; font-size: 8px; line-height: 1; }
-.equipment-apply-mask { position: absolute; z-index: 2; left: 81.79%; top: 91.9%; width: 18.21%; height: 8.1%; background: #efefef; }
-.equipment-preset-controls { position: absolute; z-index: 3; left: 50.48%; top: 92.33%; width: 25.56%; height: 6.67%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 13%; }
+.equipment-apply-mask { position: absolute; z-index: 2; left: 79.027%; top: 89.75%; width: 20.973%; height: 10.25%; background: #efefef; }
+.equipment-preset-controls { position: absolute; z-index: 3; left: 50.456%; top: 90.19%; width: 24.316%; height: 6.329%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 13%; }
 .equipment-preset-controls button { min-width: 0; padding: 0; border: 2px solid transparent; border-radius: 5px; background: transparent; color: transparent; }
 .equipment-preset-controls button:hover { border-color: rgba(255, 255, 255, .9); }
 .equipment-preset-controls button[aria-pressed="true"] { border-color: #24d8f2; background: rgba(31, 190, 215, .28); box-shadow: 0 0 8px rgba(36, 216, 242, .8); }

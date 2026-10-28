@@ -62,7 +62,7 @@ const SLOT_DEFINITIONS: SlotDefinition[] = [
   slot("emblem", "EMBLEM", null, "Emblem", 204, 280), slot("android", "ANDROID", null, "Android", 249, 280), slot("heart", "HEART", null, "Heart", 294, 280), slot("pocket", "POCKET", null, "Pocket", 24, 325), slot("badge", "BADGE", null, "Badge", 294, 325),
 ];
 
-const EQUIPMENT_CROP = { x: 23, y: 100, width: 313, height: 300 };
+const EQUIPMENT_CROP = { x: 15, y: 92, width: 329, height: 316 };
 
 function slot(key: string, equipmentSlot: EquipmentSlot, slotIndex: number | null, label: string, x: number, y: number): SlotDefinition {
   return { key, slot: equipmentSlot, slotIndex, label, x, y };
@@ -123,7 +123,7 @@ export function EquipmentManager({
     setDraft((current) => current ? {
       ...current,
       name,
-      levelRequirement: item?.levelRequirement ?? current.levelRequirement,
+      levelRequirement: name ? item?.levelRequirement ?? current.levelRequirement : null,
     } : current);
   }
 
@@ -258,8 +258,11 @@ export function EquipmentManager({
 
             <div className="equipment-editor-fields">
               <label>Item
-                <input list="equipment-catalog" value={draft.name} onChange={(event) => chooseCatalogItem(event.target.value)} placeholder={loadingCatalog ? "Loading…" : "Select or enter an item"} />
-                <datalist id="equipment-catalog">{catalog.map((item) => <option key={item.id} value={item.name}>{item.levelRequirement ? `Lv. ${item.levelRequirement}` : ""}</option>)}</datalist>
+                <select value={draft.name} disabled={loadingCatalog} onChange={(event) => chooseCatalogItem(event.target.value)}>
+                  <option value="">{loadingCatalog ? "Loading equipment…" : "Select equipment"}</option>
+                  {draft.name && !catalog.some((item) => item.name === draft.name) && <option value={draft.name}>{draft.name}</option>}
+                  {catalog.map((item) => <option key={item.id} value={item.name}>{item.name}{item.levelRequirement ? ` · Lv. ${item.levelRequirement}` : ""}</option>)}
+                </select>
               </label>
 
               <div className="field-grid">
