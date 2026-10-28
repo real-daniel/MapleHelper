@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { apiFetch } from "@/lib/api";
 import { potentialLineOptions, supportsPotential } from "@/components/potential-lines";
 
@@ -46,21 +46,23 @@ type SlotDefinition = {
   slot: EquipmentSlot;
   slotIndex: number | null;
   label: string;
+  x: number;
+  y: number;
 };
 
 type EquipmentDraft = Omit<EquipmentItem, "id" | "characterProfileId" | "createdAt" | "updatedAt">;
 
 const SLOT_DEFINITIONS: SlotDefinition[] = [
-  slot("ring-1", "RING", 1, "Ring 1"), slot("face", "FACE", null, "Face"), slot("hat", "HAT", null, "Hat"), slot("cape", "CAPE", null, "Cape"), slot("ring-2", "RING", 2, "Ring 2"),
-  slot("ring-3", "RING", 3, "Ring 3"), slot("eye", "EYE", null, "Eye"), slot("top", "TOP", null, "Top"), slot("gloves", "GLOVES", null, "Gloves"), slot("ring-4", "RING", 4, "Ring 4"),
-  slot("pendant-1", "PENDANT", 1, "Pendant 1"), slot("earrings", "EARRINGS", null, "Earrings"), slot("bottom", "BOTTOM", null, "Bottom"), slot("shoes", "SHOES", null, "Shoes"), slot("pendant-2", "PENDANT", 2, "Pendant 2"),
-  slot("belt", "BELT", null, "Belt"), slot("shoulder", "SHOULDER", null, "Shoulder"), slot("weapon", "WEAPON", null, "Weapon"), slot("secondary", "SECONDARY", null, "Secondary"), slot("emblem", "EMBLEM", null, "Emblem"),
-  slot("pocket", "POCKET", null, "Pocket"), slot("badge", "BADGE", null, "Badge"), slot("medal", "MEDAL", null, "Medal"), slot("android", "ANDROID", null, "Android"), slot("heart", "HEART", null, "Heart"),
-  slot("totem-1", "TOTEM", 1, "Totem 1"), slot("totem-2", "TOTEM", 2, "Totem 2"), slot("totem-3", "TOTEM", 3, "Totem 3"),
+  slot("ring-1", "RING", 1, "Ring 1", 24, 101), slot("face", "FACE", null, "Face", 69, 101), slot("hat", "HAT", null, "Hat", 250, 101), slot("cape", "CAPE", null, "Cape", 294, 101),
+  slot("ring-2", "RING", 2, "Ring 2", 24, 146), slot("eye", "EYE", null, "Eye", 69, 146), slot("top", "TOP", null, "Top", 250, 146), slot("gloves", "GLOVES", null, "Gloves", 294, 146),
+  slot("ring-3", "RING", 3, "Ring 3", 24, 190), slot("earrings", "EARRINGS", null, "Earrings", 69, 190), slot("bottom", "BOTTOM", null, "Bottom", 250, 190), slot("shoes", "SHOES", null, "Shoes", 294, 190),
+  slot("ring-4", "RING", 4, "Ring 4", 24, 235), slot("pendant-1", "PENDANT", 1, "Pendant 1", 69, 235), slot("shoulder", "SHOULDER", null, "Shoulder", 250, 235), slot("medal", "MEDAL", null, "Medal", 294, 235),
+  slot("belt", "BELT", null, "Belt", 24, 280), slot("pendant-2", "PENDANT", 2, "Pendant 2", 69, 280), slot("weapon", "WEAPON", null, "Weapon", 114, 280), slot("secondary", "SECONDARY", null, "Secondary", 159, 280),
+  slot("emblem", "EMBLEM", null, "Emblem", 204, 280), slot("android", "ANDROID", null, "Android", 249, 280), slot("heart", "HEART", null, "Heart", 294, 280), slot("pocket", "POCKET", null, "Pocket", 24, 325), slot("badge", "BADGE", null, "Badge", 294, 325),
 ];
 
-function slot(key: string, equipmentSlot: EquipmentSlot, slotIndex: number | null, label: string): SlotDefinition {
-  return { key, slot: equipmentSlot, slotIndex, label };
+function slot(key: string, equipmentSlot: EquipmentSlot, slotIndex: number | null, label: string, x: number, y: number): SlotDefinition {
+  return { key, slot: equipmentSlot, slotIndex, label, x, y };
 }
 
 export function EquipmentManager({
@@ -196,9 +198,9 @@ export function EquipmentManager({
           <span className="muted">{equipment.length} / {SLOT_DEFINITIONS.length}</span>
         </div>
         <div className="equipment-slot-grid" aria-label="Equipment slots">
+          <Image className="equipment-window-image" src="/equipment/equipment-inventory.png" alt="" width={363} height={442} priority />
           <div className="equipment-character">
-            {characterImageUrl ? <Image src={characterImageUrl} alt="" width={180} height={180} unoptimized /> : <span>{characterName.slice(0, 1)}</span>}
-            <strong>{characterName}</strong>
+            {characterImageUrl ? <Image src={characterImageUrl} alt={characterName} width={132} height={176} unoptimized /> : <span>{characterName.slice(0, 1)}</span>}
           </div>
           {SLOT_DEFINITIONS.map((definition) => {
             const item = findEquipment(equipment, definition);
@@ -207,11 +209,17 @@ export function EquipmentManager({
                 className={`equipment-slot equipment-slot-${definition.key}`}
                 type="button"
                 key={definition.key}
+                title={item ? `${definition.label}: ${item.name}` : definition.label}
                 aria-pressed={selectedSlot?.key === definition.key}
+                aria-label={item ? `${definition.label}, ${item.name}` : `${definition.label}, empty`}
                 onClick={() => void chooseSlot(definition)}
+                style={{
+                  "--slot-x": `${definition.x / 363 * 100}%`,
+                  "--slot-y": `${definition.y / 442 * 100}%`,
+                } as CSSProperties}
               >
-                <span>{definition.label}</span>
-                <strong>{item?.name ?? "Empty"}</strong>
+                <span className="sr-only">{definition.label}</span>
+                {item && <span className="equipment-slot-occupied" aria-hidden="true" />}
                 {item?.starForce != null && <small>{item.starForce}★</small>}
               </button>
             );
