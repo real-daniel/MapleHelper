@@ -162,7 +162,7 @@ export function EquipmentManager({
       });
       const body = await readBody(response);
       if (!response.ok) throw new Error(responseMessage(body, "Equipment save failed."));
-      const saved = body as EquipmentItem;
+      const saved = normalizeEquipmentItem(body as EquipmentItem);
       onChange([...equipment.filter((item) => !samePosition(item, selectedSlot, activePreset)), saved]);
       setDraft(fromItem(saved));
       onMessage(`Saved ${saved.name}.`);
@@ -328,9 +328,9 @@ function flameFields(slot: EquipmentSlot) {
     : BASE_FLAME_FIELDS;
 }
 
-function parseFlameStats(text: string) {
+function parseFlameStats(text: string | null | undefined) {
   const values = new Map<string, number>();
-  for (const line of text.split(/\r?\n/)) {
+  for (const line of (text ?? "").split(/\r?\n/)) {
     const match = line.match(/^(.+?):\s*\+?(-?\d+)/);
     if (match) values.set(match[1].trim(), Number(match[2]));
   }
@@ -341,8 +341,8 @@ function formatFlameStats(values: Map<string, number>) {
   return [...values].map(([stat, value]) => `${stat}: +${value}${["All Stat", "Boss Damage", "Damage"].includes(stat) ? "%" : ""}`).join("\n");
 }
 
-function parsePotentialLines(text: string) {
-  return text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(0, 3);
+function parsePotentialLines(text: string | null | undefined) {
+  return (text ?? "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(0, 3);
 }
 
 function emptyDraft(definition: SlotDefinition, presetNumber: number): EquipmentDraft {
@@ -365,21 +365,37 @@ function emptyDraft(definition: SlotDefinition, presetNumber: number): Equipment
 }
 
 function fromItem(item: EquipmentItem): EquipmentDraft {
+  const normalized = normalizeEquipmentItem(item);
   return {
+    presetNumber: normalized.presetNumber,
+    slot: normalized.slot,
+    slotIndex: normalized.slotIndex,
+    name: normalized.name,
+    levelRequirement: normalized.levelRequirement,
+    starForce: normalized.starForce,
+    statLines: normalized.statLines,
+    flameStats: normalized.flameStats,
+    flameScoreLines: normalized.flameScoreLines,
+    potentialTier: normalized.potentialTier,
+    potentialLines: normalized.potentialLines,
+    bonusPotentialTier: normalized.bonusPotentialTier,
+    bonusPotentialLines: normalized.bonusPotentialLines,
+    rawExtractedText: normalized.rawExtractedText,
+  };
+}
+
+export function normalizeEquipmentItem(item: EquipmentItem): EquipmentItem {
+  return {
+    ...item,
     presetNumber: item.presetNumber ?? 1,
-    slot: item.slot,
-    slotIndex: item.slotIndex,
-    name: item.name,
-    levelRequirement: item.levelRequirement,
-    starForce: item.starForce,
-    statLines: item.statLines,
-    flameStats: item.flameStats,
-    flameScoreLines: item.flameScoreLines,
-    potentialTier: item.potentialTier,
-    potentialLines: item.potentialLines,
-    bonusPotentialTier: item.bonusPotentialTier,
-    bonusPotentialLines: item.bonusPotentialLines,
-    rawExtractedText: item.rawExtractedText,
+    statLines: item.statLines ?? "",
+    flameStats: item.flameStats ?? "",
+    flameScoreLines: item.flameScoreLines ?? "",
+    potentialTier: item.potentialTier ?? "",
+    potentialLines: item.potentialLines ?? "",
+    bonusPotentialTier: item.bonusPotentialTier ?? "",
+    bonusPotentialLines: item.bonusPotentialLines ?? "",
+    rawExtractedText: item.rawExtractedText ?? "",
   };
 }
 

@@ -6,7 +6,7 @@ import { UpgradeRecommendations } from "@/components/upgrade-recommendations";
 import { BossTracker } from "@/components/boss-tracker";
 import { AccountBossIncome } from "@/components/account-boss-income";
 import { StatEquivalencyOcr } from "@/components/stat-equivalency-ocr";
-import { EquipmentManager, type EquipmentItem } from "@/components/equipment-manager";
+import { EquipmentManager, normalizeEquipmentItem, type EquipmentItem } from "@/components/equipment-manager";
 import { apiFetch } from "@/lib/api";
 
 type Region = "NORTH_AMERICA" | "EUROPE";
@@ -75,7 +75,7 @@ export function CharacterImporter() {
       const response = await apiFetch(`/api/v1/equipment${params}`);
       const body = await readBody(response);
       if (!response.ok) throw new Error(body.message ?? "Could not load equipment.");
-      setEquipment(body as EquipmentItem[]);
+      setEquipment((body as EquipmentItem[]).map(normalizeEquipmentItem));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not load equipment.");
     }
