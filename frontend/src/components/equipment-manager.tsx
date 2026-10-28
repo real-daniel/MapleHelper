@@ -234,7 +234,13 @@ export function EquipmentManager({
                 } as CSSProperties}
               >
                 <span className="sr-only">{definition.label}</span>
-                {item && <span className="equipment-slot-occupied" aria-hidden="true" />}
+                {item && (
+                  <span
+                    className="equipment-slot-icon"
+                    aria-hidden="true"
+                    style={{ backgroundImage: `url("${equipmentIconUrl(item)}")` }}
+                  />
+                )}
                 {item?.starForce != null && <small>{item.starForce}★</small>}
               </button>
             );
@@ -405,6 +411,12 @@ function findEquipment(equipment: EquipmentItem[], definition: SlotDefinition, p
 
 function samePosition(item: Pick<EquipmentItem, "slot" | "slotIndex" | "presetNumber">, definition: SlotDefinition, presetNumber: number) {
   return (item.presetNumber ?? 1) === presetNumber && item.slot === definition.slot && (item.slotIndex ?? null) === definition.slotIndex;
+}
+
+function equipmentIconUrl(item: EquipmentItem) {
+  const params = new URLSearchParams({ name: item.name, slot: item.slot });
+  if (item.levelRequirement != null) params.set("level", String(item.levelRequirement));
+  return `/api/v1/equipment-icons?${params.toString()}`;
 }
 
 function deduplicateCatalog(items: CatalogItem[]) {

@@ -17,6 +17,30 @@ app.get("/oauth2/authorization/discord", beginDiscordLogin);
 app.get("/login/oauth2/code/discord", finishDiscordLogin);
 app.get("/api/v1/auth/csrf", issueCsrf);
 
+app.get("/api/v1/equipment-icons", async (c) => {
+  const name = c.req.query("name")?.trim();
+  if (!name || name.length > 120) throw new HttpError(400, "A valid equipment name is required.");
+  const levelValue = Number(c.req.query("level"));
+  const level = Number.isInteger(levelValue) && levelValue >= 0 && levelValue <= 300 ? levelValue : null;
+  const slotValue = c.req.query("slot")?.toUpperCase();
+  const slot = slotValue && EQUIPMENT_SLOTS.includes(slotValue as EquipmentSlot) ? slotValue as EquipmentSlot : null;
+  const cache = (caches as CacheStorage & { default: Cache }).default;
+  const cacheKey = new Request(c.req.url, { method: "GET" });
+  const cached = await cache.match(cacheKey);
+  if (cached) return cached;
+
+  const icon = await fetchEquipmentIcon(name, level, slot);
+  if (!icon) return c.body(null, 404);
+  const response = new Response(icon.body, {
+    headers: {
+      "Content-Type": icon.headers.get("Content-Type") ?? "image/png",
+      "Cache-Control": "public, max-age=604800, s-maxage=2592000",
+    },
+  });
+  c.executionCtx.waitUntil(cache.put(cacheKey, response.clone()));
+  return response;
+});
+
 app.use("/api/v1/auth/me", requireAuth);
 app.get("/api/v1/auth/me", (c) => c.json(currentUser(c)));
 app.use("/api/v1/auth/logout", requireAuth, requireCsrf);
@@ -347,6 +371,85 @@ function publicBossEntry(row: Record<string, unknown>) {
     tracked: Boolean(row.tracked),
     cleared: Boolean(row.cleared),
   };
+}
+
+type MapleStoryIoItem = {
+  id: number;
+  name: string;
+  requiredLevel?: number | null;
+  typeInfo?: { overallCategory?: string; category?: string; subCategory?: string };
+};
+
+let gmsVersionPromise: Promise<string> | null = null;
+
+async function fetchEquipmentIcon(name: string, level: number | null, slot: EquipmentSlot | null) {
+  try {
+    const version = await currentGmsVersion();
+    const searchName = equipmentIconSearchName(name, slot);
+    const search = new URL(`https://maplestory.io/api/GMS/${version}/item`);
+    search.search = new URLSearchParams({ searchFor: searchName, count: "50" }).toString();
+    const searchResponse = await fetch(search, { headers: { Accept: "application/json" } });
+    if (!searchResponse.ok) return null;
+    const items = await searchResponse.json<MapleStoryIoItem[]>();
+    const match = items
+      .filter((item) => item.typeInfo?.overallCategory === "Equip")
+      .map((item) => ({ item, score: equipmentIconScore(item, searchName, level, slot) }))
+      .sort((left, right) => right.score - left.score)[0];
+    if (!match || match.score < 20) return null;
+    const iconResponse = await fetch(`https://maplestory.io/api/GMS/${version}/item/${match.item.id}/icon`);
+    return iconResponse.ok ? iconResponse : null;
+  } catch (error) {
+    console.error("Equipment icon lookup failed", error);
+    return null;
+  }
+}
+
+function equipmentIconSearchName(name: string, slot: EquipmentSlot | null) {
+  if (["chaos root abyss", "root abyss"].includes(name.toLowerCase())) {
+    if (slot === "HAT") return "Royal Warrior Helm";
+    if (slot === "TOP") return "Eagle Eye Warrior Armor";
+    if (slot === "BOTTOM") return "Trixter Warrior Pants";
+  }
+  return name;
+}
+
+async function currentGmsVersion() {
+  if (!gmsVersionPromise) {
+    gmsVersionPromise = fetch("https://maplestory.io/api/wz")
+      .then((response) => {
+        if (!response.ok) throw new Error(`MapleStory.IO version lookup failed (${response.status}).`);
+        return response.json<Array<{ region: string; mapleVersionId: string; isReady: boolean; hasImages: boolean }>>();
+      })
+      .then((versions) => versions
+        .filter((version) => version.region === "GMS" && version.isReady && version.hasImages && /^\d+$/.test(version.mapleVersionId))
+        .sort((left, right) => Number(right.mapleVersionId) - Number(left.mapleVersionId))[0]?.mapleVersionId ?? "270")
+      .catch((error) => {
+        gmsVersionPromise = null;
+        throw error;
+      });
+  }
+  return gmsVersionPromise;
+}
+
+function equipmentIconScore(item: MapleStoryIoItem, name: string, level: number | null, slot: EquipmentSlot | null) {
+  const candidate = item.name.toLowerCase();
+  const requested = name.toLowerCase();
+  let score = candidate === requested ? 100 : candidate.startsWith(requested) ? 65 : candidate.includes(requested) ? 40 : 0;
+  if (level != null && item.requiredLevel === level) score += 30;
+  const category = `${item.typeInfo?.category ?? ""} ${item.typeInfo?.subCategory ?? ""}`.toLowerCase();
+  if (slot && slotIconHints(slot).some((hint) => category.includes(hint))) score += 35;
+  return score;
+}
+
+function slotIconHints(slot: EquipmentSlot): string[] {
+  const hints: Partial<Record<EquipmentSlot, string[]>> = {
+    RING: ["ring"], PENDANT: ["pendant"], WEAPON: ["weapon"], SECONDARY: ["secondary", "shield"],
+    EMBLEM: ["emblem"], HAT: ["hat", "cap"], FACE: ["face"], EYE: ["eye"], EARRINGS: ["earring"],
+    TOP: ["coat", "top"], BOTTOM: ["pants", "bottom"], SHOES: ["shoe"], GLOVES: ["glove"],
+    CAPE: ["cape"], BELT: ["belt"], SHOULDER: ["shoulder"], POCKET: ["pocket"], BADGE: ["badge"],
+    MEDAL: ["medal"], ANDROID: ["android"], HEART: ["heart"], TOTEM: ["totem"],
+  };
+  return hints[slot] ?? [];
 }
 
 export default app;
