@@ -14,6 +14,7 @@ export type EquipmentSlot =
 export type EquipmentItem = {
   id: number;
   characterProfileId: number | null;
+  presetNumber: number;
   slot: EquipmentSlot;
   slotIndex: number | null;
   name: string;
@@ -61,6 +62,8 @@ const SLOT_DEFINITIONS: SlotDefinition[] = [
   slot("emblem", "EMBLEM", null, "Emblem", 204, 280), slot("android", "ANDROID", null, "Android", 249, 280), slot("heart", "HEART", null, "Heart", 294, 280), slot("pocket", "POCKET", null, "Pocket", 24, 325), slot("badge", "BADGE", null, "Badge", 294, 325),
 ];
 
+const EQUIPMENT_CROP = { x: 23, y: 100, width: 313, height: 300 };
+
 function slot(key: string, equipmentSlot: EquipmentSlot, slotIndex: number | null, label: string, x: number, y: number): SlotDefinition {
   return { key, slot: equipmentSlot, slotIndex, label, x, y };
 }
@@ -70,6 +73,8 @@ export function EquipmentManager({
   characterName,
   characterImageUrl,
   equipment,
+  activePreset,
+  onPresetChange,
   onChange,
   onMessage,
 }: {
@@ -77,6 +82,8 @@ export function EquipmentManager({
   characterName: string;
   characterImageUrl: string | null;
   equipment: EquipmentItem[];
+  activePreset: number;
+  onPresetChange: (preset: number) => void;
   onChange: (equipment: EquipmentItem[]) => void;
   onMessage: (message: string) => void;
 }) {
@@ -89,8 +96,8 @@ export function EquipmentManager({
   async function chooseSlot(definition: SlotDefinition) {
     setSelectedSlot(definition);
     onMessage("");
-    const current = findEquipment(equipment, definition);
-    setDraft(current ? fromItem(current) : emptyDraft(definition));
+    const current = findEquipment(equipment, definition, activePreset);
+    setDraft(current ? fromItem(current) : emptyDraft(definition, activePreset));
     setLoadingCatalog(true);
     try {
       const query = new URLSearchParams({ slot: definition.slot });
@@ -156,7 +163,7 @@ export function EquipmentManager({
       const body = await readBody(response);
       if (!response.ok) throw new Error(responseMessage(body, "Equipment save failed."));
       const saved = body as EquipmentItem;
-      onChange([...equipment.filter((item) => !samePosition(item, selectedSlot)), saved]);
+      onChange([...equipment.filter((item) => !samePosition(item, selectedSlot, activePreset)), saved]);
       setDraft(fromItem(saved));
       onMessage(`Saved ${saved.name}.`);
     } catch (error) {
@@ -168,7 +175,7 @@ export function EquipmentManager({
 
   async function removeEquipment() {
     if (!selectedSlot) return;
-    const current = findEquipment(equipment, selectedSlot);
+    const current = findEquipment(equipment, selectedSlot, activePreset);
     if (!current) return;
     setSaving(true);
     onMessage("");
@@ -179,7 +186,7 @@ export function EquipmentManager({
         throw new Error(responseMessage(body, "Equipment delete failed."));
       }
       onChange(equipment.filter((item) => item.id !== current.id));
-      setDraft(emptyDraft(selectedSlot));
+      setDraft(emptyDraft(selectedSlot, activePreset));
       onMessage(`Removed ${current.name}.`);
     } catch (error) {
       onMessage(error instanceof Error ? error.message : "Equipment delete failed.");
@@ -188,14 +195,22 @@ export function EquipmentManager({
     }
   }
 
-  const selectedItem = selectedSlot ? findEquipment(equipment, selectedSlot) : null;
+  function selectPreset(preset: number) {
+    onPresetChange(preset);
+    if (!selectedSlot) return;
+    const current = findEquipment(equipment, selectedSlot, preset);
+    setDraft(current ? fromItem(current) : emptyDraft(selectedSlot, preset));
+  }
+
+  const activeEquipment = equipment.filter((item) => (item.presetNumber ?? 1) === activePreset);
+  const selectedItem = selectedSlot ? findEquipment(equipment, selectedSlot, activePreset) : null;
 
   return (
     <div className="equipment-manager">
       <section className="equipment-slots-panel">
         <div className="section-heading">
           <h2>Equipment</h2>
-          <span className="muted">{equipment.length} / {SLOT_DEFINITIONS.length}</span>
+          <span className="muted">Preset {activePreset} · {activeEquipment.length} / {SLOT_DEFINITIONS.length}</span>
         </div>
         <div className="equipment-slot-grid" aria-label="Equipment slots">
           <Image className="equipment-window-image" src="/equipment/equipment-inventory.png" alt="" width={363} height={442} priority />
@@ -203,7 +218,7 @@ export function EquipmentManager({
             {characterImageUrl ? <Image src={characterImageUrl} alt={characterName} width={132} height={176} unoptimized /> : <span>{characterName.slice(0, 1)}</span>}
           </div>
           {SLOT_DEFINITIONS.map((definition) => {
-            const item = findEquipment(equipment, definition);
+            const item = findEquipment(equipment, definition, activePreset);
             return (
               <button
                 className={`equipment-slot equipment-slot-${definition.key}`}
@@ -214,8 +229,8 @@ export function EquipmentManager({
                 aria-label={item ? `${definition.label}, ${item.name}` : `${definition.label}, empty`}
                 onClick={() => void chooseSlot(definition)}
                 style={{
-                  "--slot-x": `${definition.x / 363 * 100}%`,
-                  "--slot-y": `${definition.y / 442 * 100}%`,
+                  "--slot-x": `${(definition.x - EQUIPMENT_CROP.x) / EQUIPMENT_CROP.width * 100}%`,
+                  "--slot-y": `${(definition.y - EQUIPMENT_CROP.y) / EQUIPMENT_CROP.height * 100}%`,
                 } as CSSProperties}
               >
                 <span className="sr-only">{definition.label}</span>
@@ -224,6 +239,10 @@ export function EquipmentManager({
               </button>
             );
           })}
+          <span className="equipment-apply-mask" aria-hidden="true" />
+          <div className="equipment-preset-controls" aria-label="Equipment preset">
+            {[1, 2, 3].map((preset) => <button key={preset} type="button" aria-label={`Equipment preset ${preset}`} aria-pressed={activePreset === preset} onClick={() => selectPreset(preset)}>{preset}</button>)}
+          </div>
         </div>
       </section>
 
@@ -323,8 +342,9 @@ function parsePotentialLines(text: string) {
   return text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(0, 3);
 }
 
-function emptyDraft(definition: SlotDefinition): EquipmentDraft {
+function emptyDraft(definition: SlotDefinition, presetNumber: number): EquipmentDraft {
   return {
+    presetNumber,
     slot: definition.slot,
     slotIndex: definition.slotIndex,
     name: "",
@@ -343,6 +363,7 @@ function emptyDraft(definition: SlotDefinition): EquipmentDraft {
 
 function fromItem(item: EquipmentItem): EquipmentDraft {
   return {
+    presetNumber: item.presetNumber ?? 1,
     slot: item.slot,
     slotIndex: item.slotIndex,
     name: item.name,
@@ -359,12 +380,12 @@ function fromItem(item: EquipmentItem): EquipmentDraft {
   };
 }
 
-function findEquipment(equipment: EquipmentItem[], definition: SlotDefinition) {
-  return equipment.find((item) => samePosition(item, definition)) ?? null;
+function findEquipment(equipment: EquipmentItem[], definition: SlotDefinition, presetNumber: number) {
+  return equipment.find((item) => samePosition(item, definition, presetNumber)) ?? null;
 }
 
-function samePosition(item: Pick<EquipmentItem, "slot" | "slotIndex">, definition: SlotDefinition) {
-  return item.slot === definition.slot && (item.slotIndex ?? null) === definition.slotIndex;
+function samePosition(item: Pick<EquipmentItem, "slot" | "slotIndex" | "presetNumber">, definition: SlotDefinition, presetNumber: number) {
+  return (item.presetNumber ?? 1) === presetNumber && item.slot === definition.slot && (item.slotIndex ?? null) === definition.slotIndex;
 }
 
 function deduplicateCatalog(items: CatalogItem[]) {

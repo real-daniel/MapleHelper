@@ -276,17 +276,18 @@ app.post("/api/v1/equipment", async (c) => {
   if (profileId != null) await profileById(c.env.DB, profileId, userId);
   const slot = body.slot;
   if (typeof slot !== "string" || !EQUIPMENT_SLOTS.includes(slot as EquipmentSlot)) throw new HttpError(400, "Invalid equipment slot.");
+  const presetNumber = integerValue(body.presetNumber, "presetNumber", 1, 3) ?? 1;
   const capacity = equipmentSlotCapacity(slot as EquipmentSlot);
   const requestedSlotIndex = capacity === 1 ? null : integerValue(body.slotIndex, "slotIndex", 1, capacity);
   let slotIndex = resolveEquipmentSlotIndex(slot as EquipmentSlot, requestedSlotIndex, []);
   if (profileId != null && capacity > 1) {
-    const occupied = await c.env.DB.prepare("SELECT slot_index FROM equipment_items WHERE app_user_id=? AND character_profile_id=? AND slot=?")
-      .bind(userId, profileId, slot).all<{ slot_index: number | null }>();
+    const occupied = await c.env.DB.prepare("SELECT slot_index FROM equipment_items WHERE app_user_id=? AND character_profile_id=? AND preset_number=? AND slot=?")
+      .bind(userId, profileId, presetNumber, slot).all<{ slot_index: number | null }>();
     slotIndex = resolveEquipmentSlotIndex(slot as EquipmentSlot, requestedSlotIndex, occupied.results.map((row) => row.slot_index));
   }
   if (profileId != null) {
-    await c.env.DB.prepare("DELETE FROM equipment_items WHERE app_user_id=? AND character_profile_id=? AND slot=? AND slot_index IS ?")
-      .bind(userId, profileId, slot, slotIndex).run();
+    await c.env.DB.prepare("DELETE FROM equipment_items WHERE app_user_id=? AND character_profile_id=? AND preset_number=? AND slot=? AND slot_index IS ?")
+      .bind(userId, profileId, presetNumber, slot, slotIndex).run();
   }
   const now = new Date().toISOString();
   const values = {
@@ -303,10 +304,10 @@ app.post("/api/v1/equipment", async (c) => {
     raw: stringValue(body.rawExtractedText, "rawExtractedText", 8000),
   };
   const result = await c.env.DB.prepare(`INSERT INTO equipment_items
-    (app_user_id,character_profile_id,slot,slot_index,name,level_requirement,star_force,stat_lines,flame_stats,
+    (app_user_id,character_profile_id,preset_number,slot,slot_index,name,level_requirement,star_force,stat_lines,flame_stats,
      flame_score_lines,potential_tier,potential_lines,bonus_potential_tier,bonus_potential_lines,raw_extracted_text,created_at,updated_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-    .bind(userId, profileId, slot, slotIndex, values.name, values.level, values.stars, values.stat, values.flame,
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .bind(userId, profileId, presetNumber, slot, slotIndex, values.name, values.level, values.stars, values.stat, values.flame,
       values.flameScore, values.potentialTier, values.potential, values.bonusTier, values.bonus, values.raw, now, now).run();
   const row = await c.env.DB.prepare("SELECT * FROM equipment_items WHERE id=? AND app_user_id=?")
     .bind(result.meta.last_row_id, userId).first<Record<string, unknown>>();

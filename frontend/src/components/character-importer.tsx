@@ -36,6 +36,7 @@ export function CharacterImporter() {
   const [profiles, setProfiles] = useState<CharacterProfile[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState("");
   const [equipment, setEquipment] = useState<EquipmentItem[]>([]);
+  const [activeEquipmentPreset, setActiveEquipmentPreset] = useState(1);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [characterView, setCharacterView] = useState<"overview" | "equipment" | "stats" | "upgrades" | "bosses" | "manage">("overview");
@@ -158,7 +159,7 @@ export function CharacterImporter() {
             type="button"
             aria-pressed={selectedProfileId === String(profile.id) && characterView !== "manage"}
             key={profile.id}
-            onClick={() => { setSelectedProfileId(String(profile.id)); setCharacterView("overview"); void loadEquipment(String(profile.id)); }}
+            onClick={() => { setSelectedProfileId(String(profile.id)); setActiveEquipmentPreset(1); setCharacterView("overview"); void loadEquipment(String(profile.id)); }}
           >
             <span className="character-portrait">
               {profile.imageUrl ? <Image src={profile.imageUrl} alt="" width={68} height={68} unoptimized /> : profile.name.slice(0, 1)}
@@ -208,17 +209,17 @@ export function CharacterImporter() {
               <div className="stat-grid">
                 <article><span>Weekly rank</span><strong>#{selectedProfile.weeklyRank.toLocaleString()}</strong></article>
                 <article><span>Weekly EXP</span><strong>{formatCompactNumber(selectedProfile.weeklyExperience)}</strong></article>
-                <article><span>Saved gear</span><strong>{equipment.length}</strong></article>
+                <article><span>Saved gear</span><strong>{equipment.filter((item) => (item.presetNumber ?? 1) === activeEquipmentPreset).length}</strong></article>
               </div>
               <section className="quick-actions"><h2>Actions</h2><div className="action-grid"><button type="button" onClick={() => setCharacterView("equipment")}><strong>Update equipment</strong></button><button type="button" onClick={() => setCharacterView("upgrades")}><strong>Review upgrades</strong></button></div></section>
             </div>
           )}
 
           {characterView === "equipment" && (
-            <EquipmentManager profileId={selectedProfile.id} characterName={selectedProfile.name} characterImageUrl={selectedProfile.imageUrl} equipment={equipment} onChange={setEquipment} onMessage={setMessage} />
+            <EquipmentManager profileId={selectedProfile.id} characterName={selectedProfile.name} characterImageUrl={selectedProfile.imageUrl} equipment={equipment} activePreset={activeEquipmentPreset} onPresetChange={setActiveEquipmentPreset} onChange={setEquipment} onMessage={setMessage} />
           )}
 
-          {characterView === "upgrades" && <UpgradeRecommendations equipment={equipment} selectedProfileId={selectedProfileId} />}
+          {characterView === "upgrades" && <UpgradeRecommendations equipment={equipment.filter((item) => (item.presetNumber ?? 1) === activeEquipmentPreset)} selectedProfileId={selectedProfileId} />}
 
           {characterView === "stats" && <StatEquivalencyOcr key={selectedProfile.id} characterName={selectedProfile.name} />}
 
