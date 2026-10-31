@@ -300,6 +300,14 @@ app.post("/api/v1/equipment", async (c) => {
   const profile = profileId != null ? await profileById(c.env.DB, profileId, userId) : null;
   const slot = body.slot;
   if (typeof slot !== "string" || !EQUIPMENT_SLOTS.includes(slot as EquipmentSlot)) throw new HttpError(400, "Invalid equipment slot.");
+  const catalogItemId = integerValue(body.catalogItemId, "catalogItemId", 1, Number.MAX_SAFE_INTEGER);
+  if (catalogItemId != null) {
+    const catalogItem = await c.env.DB.prepare("SELECT slot FROM equipment_catalog_items WHERE id=?")
+      .bind(catalogItemId).first<{ slot: string }>();
+    if (!catalogItem || catalogItem.slot.replace(/_(?:1|2|3|4)$/, "") !== slot) {
+      throw new HttpError(400, "catalogItemId does not match the selected equipment slot.");
+    }
+  }
   const presetNumber = integerValue(body.presetNumber, "presetNumber", 1, 3) ?? 1;
   const capacity = equipmentSlotCapacity(slot as EquipmentSlot);
   const requestedSlotIndex = capacity === 1 ? null : integerValue(body.slotIndex, "slotIndex", 1, capacity);
@@ -339,10 +347,10 @@ app.post("/api/v1/equipment", async (c) => {
     throw new HttpError(400, `starForce cannot exceed ${starForceCap} for this equipment.`);
   }
   const result = await c.env.DB.prepare(`INSERT INTO equipment_items
-    (app_user_id,character_profile_id,preset_number,slot,slot_index,name,level_requirement,star_force,astra_stage,stat_lines,flame_stats,
+    (app_user_id,character_profile_id,catalog_item_id,preset_number,slot,slot_index,name,level_requirement,star_force,astra_stage,stat_lines,flame_stats,
      flame_score_lines,potential_tier,potential_lines,bonus_potential_tier,bonus_potential_lines,raw_extracted_text,created_at,updated_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-    .bind(userId, profileId, presetNumber, slot, slotIndex, values.name, values.level, values.stars, astra ? values.astraStage ?? 1 : null, values.stat, values.flame,
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .bind(userId, profileId, catalogItemId, presetNumber, slot, slotIndex, values.name, values.level, values.stars, astra ? values.astraStage ?? 1 : null, values.stat, values.flame,
       values.flameScore, values.potentialTier, values.potential, values.bonusTier, values.bonus, values.raw, now, now).run();
   const row = await c.env.DB.prepare("SELECT * FROM equipment_items WHERE id=? AND app_user_id=?")
     .bind(result.meta.last_row_id, userId).first<Record<string, unknown>>();

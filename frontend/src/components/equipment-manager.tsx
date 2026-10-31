@@ -5,6 +5,7 @@ import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { apiFetch } from "@/lib/api";
 import { potentialLineOptions, supportsPotential } from "@/components/potential-lines";
 import { isAstraSecondary, itemStarForceCap, supportsFlames, supportsItemPotential, type AstraStage } from "@/components/equipment-rules";
+import { equipmentJobGroup, resolveEquipmentName } from "@/components/equipment-names";
 
 export type EquipmentSlot =
   | "RING" | "PENDANT" | "WEAPON" | "SECONDARY" | "EMBLEM"
@@ -15,6 +16,7 @@ export type EquipmentSlot =
 export type EquipmentItem = {
   id: number;
   characterProfileId: number | null;
+  catalogItemId: number | null;
   presetNumber: number;
   slot: EquipmentSlot;
   slotIndex: number | null;
@@ -42,6 +44,7 @@ type CatalogItem = {
   progressionStage: string | null;
   setName: string | null;
   jobGroup: string | null;
+  namePattern: boolean;
   starForceProfile: string | null;
 };
 
@@ -151,7 +154,7 @@ export function EquipmentManager({
     setSelectedSlot(definition);
     onMessage("");
     const current = findEquipment(equipment, definition, activePreset);
-    setDraft(current ? fromItem(current) : emptyDraft(definition, activePreset));
+    setDraft(current ? { ...fromItem(current), name: resolveEquipmentName(current.name, current.slot, characterJob) } : emptyDraft(definition, activePreset));
     setLoadingCatalog(true);
     try {
       const query = new URLSearchParams({ slot: definition.slot });
@@ -159,7 +162,13 @@ export function EquipmentManager({
       const response = await apiFetch(`/api/v1/equipment/catalog?${query}`);
       const body = await readBody(response);
       if (!response.ok) throw new Error(responseMessage(body, "Could not load equipment catalog."));
-      setCatalog(deduplicateCatalog(body as CatalogItem[]));
+      const loadedCatalog = deduplicateCatalog(body as CatalogItem[], definition.slot, characterJob);
+      setCatalog(loadedCatalog);
+      setDraft((currentDraft) => {
+        if (!currentDraft || currentDraft.catalogItemId != null) return currentDraft;
+        const match = findCatalogItem(loadedCatalog, currentDraft.name, currentDraft.slot, characterJob);
+        return match ? { ...currentDraft, catalogItemId: match.id } : currentDraft;
+      });
     } catch (error) {
       setCatalog([]);
       onMessage(error instanceof Error ? error.message : "Could not load equipment catalog.");
@@ -173,22 +182,24 @@ export function EquipmentManager({
   }
 
   function chooseCatalogItem(name: string) {
-    const item = catalog.find((candidate) => candidate.name === name);
     setDraft((current) => {
       if (!current) return current;
+      const item = findCatalogItem(catalog, name, current.slot, characterJob);
+      const resolvedName = resolveEquipmentName(name, current.slot, characterJob);
       const levelRequirement = name ? item?.levelRequirement ?? current.levelRequirement : null;
-      const astraStage = isAstraSecondary(current.slot, name) ? current.astraStage ?? 1 : null;
-      const cap = itemStarForceCap(current.slot, name, levelRequirement, item?.starForceProfile, astraStage, characterJob);
+      const astraStage = isAstraSecondary(current.slot, resolvedName) ? current.astraStage ?? 1 : null;
+      const cap = itemStarForceCap(current.slot, resolvedName, levelRequirement, item?.starForceProfile, astraStage, characterJob);
       return {
         ...current,
-        name,
+        catalogItemId: item?.id ?? null,
+        name: resolvedName,
         levelRequirement,
         astraStage,
         starForce: current.starForce != null && current.starForce > cap ? cap : current.starForce,
-        flameStats: supportsFlames(current.slot, name) ? current.flameStats : "",
-        flameScoreLines: supportsFlames(current.slot, name) ? current.flameScoreLines : "",
-        potentialTier: supportsItemPotential(current.slot, name) ? current.potentialTier : "",
-        potentialLines: supportsItemPotential(current.slot, name) ? current.potentialLines : "",
+        flameStats: supportsFlames(current.slot, resolvedName) ? current.flameStats : "",
+        flameScoreLines: supportsFlames(current.slot, resolvedName) ? current.flameScoreLines : "",
+        potentialTier: supportsItemPotential(current.slot, resolvedName) ? current.potentialTier : "",
+        potentialLines: supportsItemPotential(current.slot, resolvedName) ? current.potentialLines : "",
       };
     });
   }
@@ -206,7 +217,7 @@ export function EquipmentManager({
     const levelRequirement = nullableNumber(value);
     setDraft((current) => {
       if (!current) return current;
-      const item = catalog.find((candidate) => candidate.name === current.name);
+      const item = findCatalogItem(catalog, current.name, current.slot, characterJob);
       const cap = itemStarForceCap(current.slot, current.name, levelRequirement, item?.starForceProfile, current.astraStage, characterJob);
       return { ...current, levelRequirement, starForce: current.starForce != null && current.starForce > cap ? cap : current.starForce };
     });
@@ -294,12 +305,14 @@ export function EquipmentManager({
     onPresetChange(preset);
     if (!selectedSlot) return;
     const current = findEquipment(equipment, selectedSlot, preset);
-    setDraft(current ? fromItem(current) : emptyDraft(selectedSlot, preset));
+    setDraft(current ? { ...fromItem(current), name: resolveEquipmentName(current.name, current.slot, characterJob) } : emptyDraft(selectedSlot, preset));
   }
 
   const activeEquipment = equipment.filter((item) => (item.presetNumber ?? 1) === activePreset);
   const selectedItem = selectedSlot ? findEquipment(equipment, selectedSlot, activePreset) : null;
-  const selectedCatalogItem = draft ? catalog.find((item) => item.name === draft.name) : null;
+  const selectedCatalogItem = draft ? catalog.find((item) => item.id === draft.catalogItemId)
+    ?? findCatalogItem(catalog, draft.name, draft.slot, characterJob)
+    : null;
   const starForceCap = draft
     ? itemStarForceCap(draft.slot, draft.name, draft.levelRequirement, selectedCatalogItem?.starForceProfile, draft.astraStage, characterJob)
     : 0;
@@ -318,6 +331,7 @@ export function EquipmentManager({
           </div>
           {SLOT_DEFINITIONS.map((definition) => {
             const item = findEquipment(equipment, definition, activePreset);
+            const displayItem = item ? { ...item, name: resolveEquipmentName(item.name, item.slot, characterJob) } : null;
             return (
               <button
                 className={`equipment-slot equipment-slot-${definition.key}`}
@@ -325,11 +339,11 @@ export function EquipmentManager({
                 key={definition.key}
                 title={item ? undefined : definition.label}
                 aria-pressed={selectedSlot?.key === definition.key}
-                aria-label={item ? `${definition.label}, ${item.name}` : `${definition.label}, empty`}
+                aria-label={displayItem ? `${definition.label}, ${displayItem.name}` : `${definition.label}, empty`}
                 aria-describedby={item ? "equipment-tooltip" : undefined}
-                onMouseEnter={(event) => item && showEquipmentTooltip(item, definition.label, event.currentTarget)}
+                onMouseEnter={(event) => displayItem && showEquipmentTooltip(displayItem, definition.label, event.currentTarget)}
                 onMouseLeave={hideEquipmentTooltip}
-                onFocus={(event) => item && showEquipmentTooltip(item, definition.label, event.currentTarget)}
+                onFocus={(event) => displayItem && showEquipmentTooltip(displayItem, definition.label, event.currentTarget)}
                 onBlur={hideEquipmentTooltip}
                 onClick={() => void chooseSlot(definition)}
                 style={{
@@ -338,11 +352,11 @@ export function EquipmentManager({
                 } as CSSProperties}
               >
                 <span className="sr-only">{definition.label}</span>
-                {item && (
+                {displayItem && (
                   <span
                     className="equipment-slot-icon"
                     aria-hidden="true"
-                    style={{ backgroundImage: `url("${equipmentIconUrl(item)}")` }}
+                    style={{ backgroundImage: `url("${equipmentIconUrl(displayItem)}")` }}
                   />
                 )}
                 {item?.starForce != null && <small>{item.starForce}★</small>}
@@ -370,8 +384,11 @@ export function EquipmentManager({
               <label>Item
                 <select value={draft.name} disabled={loadingCatalog} onChange={(event) => chooseCatalogItem(event.target.value)}>
                   <option value="">{loadingCatalog ? "Loading equipment…" : "Select equipment"}</option>
-                  {draft.name && !catalog.some((item) => item.name === draft.name) && <option value={draft.name}>{draft.name}</option>}
-                  {catalog.map((item) => <option key={item.id} value={item.name}>{item.name}{item.levelRequirement ? ` · Lv. ${item.levelRequirement}` : ""}</option>)}
+                  {draft.name && !findCatalogItem(catalog, draft.name, draft.slot, characterJob) && <option value={draft.name}>{draft.name}</option>}
+                  {catalog.map((item) => {
+                    const displayName = resolveEquipmentName(item.name, draft.slot, characterJob);
+                    return <option key={item.id} value={displayName}>{displayName}{item.levelRequirement ? ` · Lv. ${item.levelRequirement}` : ""}</option>;
+                  })}
                 </select>
               </label>
 
@@ -563,6 +580,7 @@ function parsePotentialLines(text: string | null | undefined) {
 function emptyDraft(definition: SlotDefinition, presetNumber: number): EquipmentDraft {
   return {
     presetNumber,
+    catalogItemId: null,
     slot: definition.slot,
     slotIndex: definition.slotIndex,
     name: "",
@@ -584,6 +602,7 @@ function fromItem(item: EquipmentItem): EquipmentDraft {
   const normalized = normalizeEquipmentItem(item);
   return {
     presetNumber: normalized.presetNumber,
+    catalogItemId: normalized.catalogItemId,
     slot: normalized.slot,
     slotIndex: normalized.slotIndex,
     name: normalized.name,
@@ -604,6 +623,7 @@ function fromItem(item: EquipmentItem): EquipmentDraft {
 export function normalizeEquipmentItem(item: EquipmentItem): EquipmentItem {
   return {
     ...item,
+    catalogItemId: item.catalogItemId ?? null,
     presetNumber: item.presetNumber ?? 1,
     astraStage: item.astraStage ?? null,
     statLines: item.statLines ?? "",
@@ -631,14 +651,20 @@ function equipmentIconUrl(item: EquipmentItem) {
   return `/api/v1/equipment-icons?${params.toString()}`;
 }
 
-function deduplicateCatalog(items: CatalogItem[]) {
-  const seen = new Set<string>();
-  return items.filter((item) => {
-    const key = item.name.toLowerCase();
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+function deduplicateCatalog(items: CatalogItem[], slot: EquipmentSlot, jobName: string) {
+  const jobGroup = equipmentJobGroup(jobName);
+  const unique = new Map<string, CatalogItem>();
+  for (const item of items) {
+    if (item.jobGroup && jobGroup && item.jobGroup.toLowerCase() !== jobGroup.toLowerCase()) continue;
+    const key = resolveEquipmentName(item.name, slot, jobName).toLowerCase();
+    const existing = unique.get(key);
+    if (!existing || (existing.namePattern && !item.namePattern)) unique.set(key, item);
+  }
+  return [...unique.values()];
+}
+
+function findCatalogItem(items: CatalogItem[], name: string, slot: EquipmentSlot, jobName: string) {
+  return items.find((item) => item.name === name || resolveEquipmentName(item.name, slot, jobName) === name);
 }
 
 function nullableNumber(value: string) {
