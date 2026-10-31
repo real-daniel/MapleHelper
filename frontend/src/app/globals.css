@@ -216,6 +216,30 @@ dd { margin: 0; }
 .equipment-slot[aria-pressed="true"] { border-color: #24d8f2; background: rgba(31, 190, 215, .32); box-shadow: 0 0 0 1px rgba(0, 70, 82, .85), 0 0 10px rgba(36, 216, 242, .75); }
 .equipment-slot-icon { position: absolute; z-index: 1; inset: 2px; border-radius: 3px; background-position: center; background-repeat: no-repeat; background-size: contain; image-rendering: pixelated; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .65)); }
 .equipment-slot > small { position: absolute; z-index: 2; right: 2px; bottom: 1px; padding: 1px 2px; border-radius: 2px; background: rgba(20, 31, 36, .82); color: #fff; font-family: var(--font-geist-mono), monospace; font-size: 8px; line-height: 1; }
+.equipment-tooltip { position: fixed; z-index: 1000; width: min(330px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow: hidden auto; border: 1px solid #59605d; border-radius: 5px; background: linear-gradient(135deg, rgba(61, 65, 63, .98), rgba(32, 35, 34, .99) 25%); box-shadow: 0 12px 32px rgba(0, 0, 0, .55), inset 0 0 0 1px rgba(255, 255, 255, .04); color: #f7f8f7; font-family: var(--font-geist-mono), monospace; font-size: 12px; line-height: 1.45; pointer-events: none; }
+.equipment-tooltip-stars { display: flex; max-width: 220px; flex-wrap: wrap; justify-content: center; gap: 0 2px; margin: 10px auto 3px; color: #ffd83d; font-size: 12px; line-height: 1.05; text-shadow: 0 1px 2px #000; }
+.equipment-tooltip header { display: grid; justify-items: center; padding: 5px 14px 11px; text-align: center; }
+.equipment-tooltip-name { color: #f7f8f7; font-size: 15px; line-height: 1.25; text-shadow: 0 1px 2px #000; }
+.equipment-tooltip-name.tier-rare { color: #75d8ff; }
+.equipment-tooltip-name.tier-epic { color: #c596ff; }
+.equipment-tooltip-name.tier-unique { color: #ffe55c; }
+.equipment-tooltip-name.tier-legendary { color: #b8ff43; }
+.equipment-tooltip header small { color: #d9deda; font-size: 11px; }
+.equipment-tooltip-overview { display: flex; min-height: 62px; align-items: center; gap: 10px; padding: 9px 12px; border-top: 1px dashed #777d7a; border-bottom: 1px dotted #747a77; }
+.equipment-tooltip-overview > div { display: grid; gap: 2px; color: #ffdd45; font-size: 10px; }
+.equipment-tooltip-overview strong { color: #ffea73; }
+.equipment-tooltip-icon { flex: 0 0 44px; width: 44px; height: 44px; border: 1px solid #38dfea; border-radius: 3px; background-color: #eef5f3; background-position: center; background-repeat: no-repeat; background-size: contain; box-shadow: inset 0 0 0 2px rgba(0, 0, 0, .3); image-rendering: pixelated; }
+.equipment-tooltip-section { display: grid; gap: 1px; padding: 9px 12px; border-bottom: 1px dotted #747a77; }
+.equipment-tooltip-section:last-child { border-bottom: 0; }
+.equipment-tooltip-summary > span { color: #73e9ff; }
+.equipment-tooltip-summary > span:first-child { color: #f7f8f7; }
+.equipment-tooltip-summary strong { color: #f7f8f7; font-weight: 500; }
+.equipment-tooltip-section-title { margin-top: 6px; color: #d9ff43; }
+.equipment-tooltip-summary .flame { color: #a7ff60; }
+.equipment-tooltip-summary .equipment-tooltip-empty { margin-top: 5px; color: #aeb5b1; font-style: italic; }
+.equipment-tooltip-potential b { display: flex; align-items: center; gap: 5px; margin-bottom: 3px; color: #d9ff43; }
+.equipment-tooltip-potential b i { display: inline-grid; width: 16px; height: 16px; place-items: center; border-radius: 50%; background: #7fcf23; color: #162008; font-size: 10px; font-style: normal; }
+.equipment-tooltip-potential span { color: #fff; }
 .equipment-apply-mask { position: absolute; z-index: 2; left: 79.027%; top: 89.75%; width: 20.973%; height: 10.25%; background: #efefef; }
 .equipment-preset-controls { position: absolute; z-index: 3; left: 50.456%; top: 90.19%; width: 24.316%; height: 6.329%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 13%; }
 .equipment-preset-controls button { min-width: 0; padding: 0; border: 2px solid transparent; border-radius: 5px; background: transparent; color: transparent; }

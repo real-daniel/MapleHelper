@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState, type CSSProperties } from "react";
+import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { apiFetch } from "@/lib/api";
 import { potentialLineOptions, supportsPotential } from "@/components/potential-lines";
 import { isAstraSecondary, itemStarForceCap, supportsFlames, supportsItemPotential, type AstraStage } from "@/components/equipment-rules";
@@ -56,6 +56,12 @@ type SlotDefinition = {
 
 type EquipmentDraft = Omit<EquipmentItem, "id" | "characterProfileId" | "createdAt" | "updatedAt">;
 
+type EquipmentTooltipState = {
+  item: EquipmentItem;
+  label: string;
+  anchor: HTMLButtonElement;
+};
+
 const SLOT_DEFINITIONS: SlotDefinition[] = [
   slot("ring-1", "RING", 1, "Ring 1", 24, 101), slot("face", "FACE", null, "Face", 69, 101), slot("hat", "HAT", null, "Hat", 250, 101), slot("cape", "CAPE", null, "Cape", 294, 101),
   slot("ring-2", "RING", 2, "Ring 2", 24, 146), slot("eye", "EYE", null, "Eye", 69, 146), slot("top", "TOP", null, "Top", 250, 146), slot("gloves", "GLOVES", null, "Gloves", 294, 146),
@@ -97,6 +103,49 @@ export function EquipmentManager({
   const [draft, setDraft] = useState<EquipmentDraft | null>(null);
   const [loadingCatalog, setLoadingCatalog] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [equipmentTooltip, setEquipmentTooltip] = useState<EquipmentTooltipState | null>(null);
+  const [tooltipPosition, setTooltipPosition] = useState<{ left: number; top: number } | null>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    if (!equipmentTooltip || !tooltipRef.current) return;
+
+    const positionTooltip = () => {
+      const tooltip = tooltipRef.current;
+      if (!tooltip) return;
+      const anchor = equipmentTooltip.anchor.getBoundingClientRect();
+      const gap = 12;
+      const edge = 12;
+      const width = tooltip.offsetWidth;
+      const height = tooltip.offsetHeight;
+      const roomOnRight = window.innerWidth - anchor.right;
+      const preferredLeft = roomOnRight >= width + gap
+        ? anchor.right + gap
+        : anchor.left - width - gap;
+      setTooltipPosition({
+        left: Math.max(edge, Math.min(preferredLeft, window.innerWidth - width - edge)),
+        top: Math.max(edge, Math.min(anchor.top - 36, window.innerHeight - height - edge)),
+      });
+    };
+
+    positionTooltip();
+    window.addEventListener("resize", positionTooltip);
+    window.addEventListener("scroll", positionTooltip, true);
+    return () => {
+      window.removeEventListener("resize", positionTooltip);
+      window.removeEventListener("scroll", positionTooltip, true);
+    };
+  }, [equipmentTooltip]);
+
+  function showEquipmentTooltip(item: EquipmentItem, label: string, anchor: HTMLButtonElement) {
+    setTooltipPosition(null);
+    setEquipmentTooltip({ item, label, anchor });
+  }
+
+  function hideEquipmentTooltip() {
+    setEquipmentTooltip(null);
+    setTooltipPosition(null);
+  }
 
   async function chooseSlot(definition: SlotDefinition) {
     setSelectedSlot(definition);
@@ -274,9 +323,14 @@ export function EquipmentManager({
                 className={`equipment-slot equipment-slot-${definition.key}`}
                 type="button"
                 key={definition.key}
-                title={item ? `${definition.label}: ${item.name}` : definition.label}
+                title={item ? undefined : definition.label}
                 aria-pressed={selectedSlot?.key === definition.key}
                 aria-label={item ? `${definition.label}, ${item.name}` : `${definition.label}, empty`}
+                aria-describedby={item ? "equipment-tooltip" : undefined}
+                onMouseEnter={(event) => item && showEquipmentTooltip(item, definition.label, event.currentTarget)}
+                onMouseLeave={hideEquipmentTooltip}
+                onFocus={(event) => item && showEquipmentTooltip(item, definition.label, event.currentTarget)}
+                onBlur={hideEquipmentTooltip}
                 onClick={() => void chooseSlot(definition)}
                 style={{
                   "--slot-x": `${(definition.x - EQUIPMENT_CROP.x) / EQUIPMENT_CROP.width * 100}%`,
@@ -366,8 +420,104 @@ export function EquipmentManager({
           </>
         )}
       </section>
+
+      {equipmentTooltip && (
+        <EquipmentTooltip
+          ref={tooltipRef}
+          item={equipmentTooltip.item}
+          slotLabel={equipmentTooltip.label}
+          position={tooltipPosition}
+        />
+      )}
     </div>
   );
+}
+
+function EquipmentTooltip({
+  ref,
+  item,
+  slotLabel,
+  position,
+}: {
+  ref: React.Ref<HTMLDivElement>;
+  item: EquipmentItem;
+  slotLabel: string;
+  position: { left: number; top: number } | null;
+}) {
+  const statLines = displayLines(item.statLines);
+  const flameLines = displayLines(item.flameStats);
+  const potentialLines = displayLines(item.potentialLines);
+  const bonusPotentialLines = displayLines(item.bonusPotentialLines);
+  const hasDetails = statLines.length > 0 || flameLines.length > 0 || potentialLines.length > 0 || bonusPotentialLines.length > 0;
+
+  return (
+    <div
+      ref={ref}
+      id="equipment-tooltip"
+      className="equipment-tooltip"
+      role="tooltip"
+      style={{ left: position?.left ?? 12, top: position?.top ?? 12, visibility: position ? "visible" : "hidden" }}
+    >
+      {item.starForce != null && item.starForce > 0 && (
+        <div className="equipment-tooltip-stars" aria-label={`${item.starForce} Star Force`}>
+          {Array.from({ length: item.starForce }, (_, index) => <span key={index}>★</span>)}
+        </div>
+      )}
+      <header>
+        <strong className={`equipment-tooltip-name tier-${tierClass(item.potentialTier)}`}>{item.name}</strong>
+        <small>({slotLabel})</small>
+      </header>
+
+      <div className="equipment-tooltip-overview">
+        <span className="equipment-tooltip-icon" style={{ backgroundImage: `url("${equipmentIconUrl(item)}")` }} />
+        <div>
+          <span>REQ LEV: <strong>{item.levelRequirement ?? "—"}</strong></span>
+          {item.astraStage != null && <span>Astra phase: <strong>{romanNumeral(item.astraStage)}</strong></span>}
+        </div>
+      </div>
+
+      <div className="equipment-tooltip-section equipment-tooltip-summary">
+        <span>Equipment type: <strong>{slotLabel}</strong></span>
+        {statLines.map((line, index) => <span key={`${line}-${index}`}>{line}</span>)}
+        {flameLines.length > 0 && (
+          <>
+            <b className="equipment-tooltip-section-title flame">Bonus stats</b>
+            {flameLines.map((line, index) => <span className="flame" key={`${line}-${index}`}>{line}</span>)}
+          </>
+        )}
+        {!hasDetails && <span className="equipment-tooltip-empty">No detailed stats saved.</span>}
+      </div>
+
+      {potentialLines.length > 0 && (
+        <TooltipPotentialSection title={`${item.potentialTier || "Potential"} potential`} lines={potentialLines} />
+      )}
+      {bonusPotentialLines.length > 0 && (
+        <TooltipPotentialSection title={`${item.bonusPotentialTier || "Bonus"} potential`} lines={bonusPotentialLines} bonus />
+      )}
+    </div>
+  );
+}
+
+function TooltipPotentialSection({ title, lines, bonus = false }: { title: string; lines: string[]; bonus?: boolean }) {
+  return (
+    <div className="equipment-tooltip-section equipment-tooltip-potential">
+      <b><i>{bonus ? "B" : "P"}</i>{title}</b>
+      {lines.map((line, index) => <span key={`${line}-${index}`}>{line}</span>)}
+    </div>
+  );
+}
+
+function displayLines(value: string | null | undefined) {
+  return (value ?? "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+}
+
+function tierClass(value: string) {
+  const tier = value.trim().toLowerCase();
+  return ["rare", "epic", "unique", "legendary"].includes(tier) ? tier : "common";
+}
+
+function romanNumeral(value: number) {
+  return value === 1 ? "I" : value === 2 ? "II" : "III";
 }
 
 function potentialTierOptions() {
