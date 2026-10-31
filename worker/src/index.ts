@@ -297,7 +297,7 @@ app.post("/api/v1/equipment", async (c) => {
   const body = asObject(await c.req.json());
   const userId = currentUser(c).id;
   const profileId = integerValue(body.characterProfileId, "characterProfileId", 1, Number.MAX_SAFE_INTEGER);
-  if (profileId != null) await profileById(c.env.DB, profileId, userId);
+  const profile = profileId != null ? await profileById(c.env.DB, profileId, userId) : null;
   const slot = body.slot;
   if (typeof slot !== "string" || !EQUIPMENT_SLOTS.includes(slot as EquipmentSlot)) throw new HttpError(400, "Invalid equipment slot.");
   const presetNumber = integerValue(body.presetNumber, "presetNumber", 1, 3) ?? 1;
@@ -317,7 +317,8 @@ app.post("/api/v1/equipment", async (c) => {
   const values = {
     name: stringValue(body.name, "name", 120, true)!,
     level: integerValue(body.levelRequirement, "levelRequirement", 0, 300),
-    stars: integerValue(body.starForce, "starForce", 0, 25),
+    stars: integerValue(body.starForce, "starForce", 0, 30),
+    astraStage: integerValue(body.astraStage, "astraStage", 1, 3),
     stat: stringValue(body.statLines, "statLines", 4000),
     flame: stringValue(body.flameStats, "flameStats", 4000),
     flameScore: stringValue(body.flameScoreLines, "flameScoreLines", 4000),
@@ -327,11 +328,21 @@ app.post("/api/v1/equipment", async (c) => {
     bonus: stringValue(body.bonusPotentialLines, "bonusPotentialLines", 4000),
     raw: stringValue(body.rawExtractedText, "rawExtractedText", 8000),
   };
+  const astra = slot === "SECONDARY" && /^astra\b/i.test(values.name);
+  const astraAlwaysThirty = /astra (katara|talisman)/i.test(values.name) || /dual blade|kanna/i.test(String(profile?.job ?? ""));
+  const astraCap = astraAlwaysThirty ? 30 : values.astraStage === 3 ? 30 : values.astraStage === 2 ? 20 : 15;
+  const badgeCap = slot === "BADGE" && ["ghost ship exorcist", "sengoku hakase badge", "shackles of resentment"].includes(values.name.toLowerCase())
+    ? 22
+    : standardStarForceLimit(values.level);
+  const starForceCap = astra ? astraCap : badgeCap;
+  if (values.stars != null && values.stars > starForceCap) {
+    throw new HttpError(400, `starForce cannot exceed ${starForceCap} for this equipment.`);
+  }
   const result = await c.env.DB.prepare(`INSERT INTO equipment_items
-    (app_user_id,character_profile_id,preset_number,slot,slot_index,name,level_requirement,star_force,stat_lines,flame_stats,
+    (app_user_id,character_profile_id,preset_number,slot,slot_index,name,level_requirement,star_force,astra_stage,stat_lines,flame_stats,
      flame_score_lines,potential_tier,potential_lines,bonus_potential_tier,bonus_potential_lines,raw_extracted_text,created_at,updated_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-    .bind(userId, profileId, presetNumber, slot, slotIndex, values.name, values.level, values.stars, values.stat, values.flame,
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .bind(userId, profileId, presetNumber, slot, slotIndex, values.name, values.level, values.stars, astra ? values.astraStage ?? 1 : null, values.stat, values.flame,
       values.flameScore, values.potentialTier, values.potential, values.bonusTier, values.bonus, values.raw, now, now).run();
   const row = await c.env.DB.prepare("SELECT * FROM equipment_items WHERE id=? AND app_user_id=?")
     .bind(result.meta.last_row_id, userId).first<Record<string, unknown>>();
@@ -350,6 +361,15 @@ function pathId(value: string): number {
   const id = Number(value);
   if (!Number.isSafeInteger(id) || id < 1) throw new HttpError(400, "Invalid id.");
   return id;
+}
+
+function standardStarForceLimit(level: number | null) {
+  if (level == null || level >= 138) return 30;
+  if (level >= 128) return 20;
+  if (level >= 118) return 15;
+  if (level >= 108) return 10;
+  if (level >= 95) return 8;
+  return 5;
 }
 
 async function profileById(db: D1Database, id: number, userId: number) {

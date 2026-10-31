@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useState, type CSSProperties } from "react";
 import { apiFetch } from "@/lib/api";
 import { potentialLineOptions, supportsPotential } from "@/components/potential-lines";
+import { isAstraSecondary, itemStarForceCap, supportsFlames, supportsItemPotential, type AstraStage } from "@/components/equipment-rules";
 
 export type EquipmentSlot =
   | "RING" | "PENDANT" | "WEAPON" | "SECONDARY" | "EMBLEM"
@@ -20,6 +21,7 @@ export type EquipmentItem = {
   name: string;
   levelRequirement: number | null;
   starForce: number | null;
+  astraStage: AstraStage | null;
   statLines: string;
   flameStats: string;
   flameScoreLines: string;
@@ -40,6 +42,7 @@ type CatalogItem = {
   progressionStage: string | null;
   setName: string | null;
   jobGroup: string | null;
+  starForceProfile: string | null;
 };
 
 type SlotDefinition = {
@@ -71,6 +74,7 @@ function slot(key: string, equipmentSlot: EquipmentSlot, slotIndex: number | nul
 export function EquipmentManager({
   profileId,
   characterName,
+  characterJob,
   characterImageUrl,
   equipment,
   activePreset,
@@ -80,6 +84,7 @@ export function EquipmentManager({
 }: {
   profileId: number;
   characterName: string;
+  characterJob: string;
   characterImageUrl: string | null;
   equipment: EquipmentItem[];
   activePreset: number;
@@ -120,11 +125,42 @@ export function EquipmentManager({
 
   function chooseCatalogItem(name: string) {
     const item = catalog.find((candidate) => candidate.name === name);
-    setDraft((current) => current ? {
-      ...current,
-      name,
-      levelRequirement: name ? item?.levelRequirement ?? current.levelRequirement : null,
-    } : current);
+    setDraft((current) => {
+      if (!current) return current;
+      const levelRequirement = name ? item?.levelRequirement ?? current.levelRequirement : null;
+      const astraStage = isAstraSecondary(current.slot, name) ? current.astraStage ?? 1 : null;
+      const cap = itemStarForceCap(current.slot, name, levelRequirement, item?.starForceProfile, astraStage, characterJob);
+      return {
+        ...current,
+        name,
+        levelRequirement,
+        astraStage,
+        starForce: current.starForce != null && current.starForce > cap ? cap : current.starForce,
+        flameStats: supportsFlames(current.slot, name) ? current.flameStats : "",
+        flameScoreLines: supportsFlames(current.slot, name) ? current.flameScoreLines : "",
+        potentialTier: supportsItemPotential(current.slot, name) ? current.potentialTier : "",
+        potentialLines: supportsItemPotential(current.slot, name) ? current.potentialLines : "",
+      };
+    });
+  }
+
+  function updateAstraStage(value: string) {
+    const stage = Number(value) as AstraStage;
+    setDraft((current) => {
+      if (!current) return current;
+      const cap = itemStarForceCap(current.slot, current.name, current.levelRequirement, "NONE", stage, characterJob);
+      return { ...current, astraStage: stage, starForce: current.starForce != null && current.starForce > cap ? cap : current.starForce };
+    });
+  }
+
+  function updateLevel(value: string) {
+    const levelRequirement = nullableNumber(value);
+    setDraft((current) => {
+      if (!current) return current;
+      const item = catalog.find((candidate) => candidate.name === current.name);
+      const cap = itemStarForceCap(current.slot, current.name, levelRequirement, item?.starForceProfile, current.astraStage, characterJob);
+      return { ...current, levelRequirement, starForce: current.starForce != null && current.starForce > cap ? cap : current.starForce };
+    });
   }
 
   function updateFlameStat(stat: string, value: string) {
@@ -155,10 +191,20 @@ export function EquipmentManager({
     setSaving(true);
     onMessage("");
     try {
+      const payload = {
+        ...draft,
+        starForce: starForceCap > 0 ? draft.starForce : null,
+        flameStats: supportsFlames(draft.slot, draft.name) ? draft.flameStats : "",
+        flameScoreLines: supportsFlames(draft.slot, draft.name) ? draft.flameScoreLines : "",
+        potentialTier: supportsItemPotential(draft.slot, draft.name) ? draft.potentialTier : "",
+        potentialLines: supportsItemPotential(draft.slot, draft.name) ? draft.potentialLines : "",
+        characterProfileId: profileId,
+        rawExtractedText: "",
+      };
       const response = await apiFetch("/api/v1/equipment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...draft, characterProfileId: profileId, rawExtractedText: "" }),
+        body: JSON.stringify(payload),
       });
       const body = await readBody(response);
       if (!response.ok) throw new Error(responseMessage(body, "Equipment save failed."));
@@ -204,6 +250,10 @@ export function EquipmentManager({
 
   const activeEquipment = equipment.filter((item) => (item.presetNumber ?? 1) === activePreset);
   const selectedItem = selectedSlot ? findEquipment(equipment, selectedSlot, activePreset) : null;
+  const selectedCatalogItem = draft ? catalog.find((item) => item.name === draft.name) : null;
+  const starForceCap = draft
+    ? itemStarForceCap(draft.slot, draft.name, draft.levelRequirement, selectedCatalogItem?.starForceProfile, draft.astraStage, characterJob)
+    : 0;
 
   return (
     <div className="equipment-manager">
@@ -272,24 +322,33 @@ export function EquipmentManager({
               </label>
 
               <div className="field-grid">
-                <label>Level<input type="number" min={0} max={300} value={draft.levelRequirement ?? ""} onChange={(event) => update("levelRequirement", nullableNumber(event.target.value))} /></label>
-                <label>Star Force<input type="number" min={0} max={25} value={draft.starForce ?? ""} onChange={(event) => update("starForce", nullableNumber(event.target.value))} /></label>
+                <label>Original level<input type="number" min={0} max={300} value={draft.levelRequirement ?? ""} onChange={(event) => updateLevel(event.target.value)} /></label>
+                {starForceCap > 0 && <label>Star Force<input type="number" min={0} max={starForceCap} value={draft.starForce ?? ""} onChange={(event) => update("starForce", nullableNumber(event.target.value))} /></label>}
               </div>
 
-              <details open>
+              {isAstraSecondary(draft.slot, draft.name) && <label>Astra phase
+                <select value={draft.astraStage ?? 1} onChange={(event) => updateAstraStage(event.target.value)}>
+                  <option value={1}>I · 15★</option>
+                  <option value={2}>II · 20★</option>
+                  <option value={3}>III · 30★</option>
+                </select>
+                <small><a href="https://maplestorywiki.net/w/Astra_Secondary_Weapon" target="_blank" rel="noreferrer">Astra Katara and Astra Talisman</a> can reach 30★ at every phase.</small>
+              </label>}
+
+              {supportsFlames(draft.slot, draft.name) && <details open>
                 <summary>Flame</summary>
                 <div className="flame-field-grid">
                   {flameFields(draft.slot).map((field) => <label key={field.key}>{field.label}<input type="number" min={0} value={parseFlameStats(draft.flameStats).get(field.key) ?? ""} onChange={(event) => updateFlameStat(field.key, event.target.value)} /></label>)}
                 </div>
-              </details>
+              </details>}
 
-              {supportsPotential(draft.slot) && <details open>
+              {supportsPotential(draft.slot) && supportsItemPotential(draft.slot, draft.name) && <details open>
                 <summary>Potential</summary>
                 <label>Tier<select value={draft.potentialTier} onChange={(event) => { update("potentialTier", event.target.value); update("potentialLines", ""); }}>{potentialTierOptions()}</select></label>
                 <div className="potential-line-list">
                   {[0, 1, 2].map((index) => {
                     const current = parsePotentialLines(draft.potentialLines)[index] ?? "";
-                    const options = potentialLineOptions(draft.slot, draft.potentialTier, index);
+                    const options = potentialLineOptions(draft.slot, draft.potentialTier, index, draft.levelRequirement, characterJob);
                     return <label key={index}>Line {index + 1}<select value={current} disabled={!draft.potentialTier} onChange={(event) => updatePotentialLine(index, event.target.value)}><option value="">None</option>{current && !options.includes(current) && <option value={current}>{current}</option>}{options.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>;
                   })}
                 </div>
@@ -359,6 +418,7 @@ function emptyDraft(definition: SlotDefinition, presetNumber: number): Equipment
     name: "",
     levelRequirement: null,
     starForce: null,
+    astraStage: null,
     statLines: "",
     flameStats: "",
     flameScoreLines: "",
@@ -379,6 +439,7 @@ function fromItem(item: EquipmentItem): EquipmentDraft {
     name: normalized.name,
     levelRequirement: normalized.levelRequirement,
     starForce: normalized.starForce,
+    astraStage: normalized.astraStage,
     statLines: normalized.statLines,
     flameStats: normalized.flameStats,
     flameScoreLines: normalized.flameScoreLines,
@@ -394,6 +455,7 @@ export function normalizeEquipmentItem(item: EquipmentItem): EquipmentItem {
   return {
     ...item,
     presetNumber: item.presetNumber ?? 1,
+    astraStage: item.astraStage ?? null,
     statLines: item.statLines ?? "",
     flameStats: item.flameStats ?? "",
     flameScoreLines: item.flameScoreLines ?? "",
