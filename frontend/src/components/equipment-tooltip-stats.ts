@@ -16,6 +16,7 @@ export type TooltipStatRow = {
 };
 
 export type TooltipStatItem = {
+  name?: string;
   slot: string;
   levelRequirement: number | null;
   starForce: number | null;
@@ -44,6 +45,7 @@ export function equipmentTooltipStatRows(item: TooltipStatItem): TooltipStatRow[
   const flame = parseStats(item.flameStats);
   const explicit = parseStats(item.statLines);
   const starForce = starForceBonuses({
+    name: item.name,
     slot: item.slot,
     levelRequirement: item.levelRequirement,
     starForceProfile: item.catalogStarForceProfile,

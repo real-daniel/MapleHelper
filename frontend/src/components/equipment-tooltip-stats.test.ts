@@ -37,4 +37,30 @@ describe("equipment tooltip stats", () => {
     expect(rows.map((row) => row.map((group) => group.length))).toEqual([[5, 5, 5], [5, 5]]);
     expect(rows.flat(2).filter(Boolean)).toHaveLength(22);
   });
+
+  it("matches the in-game 23-star Endless Terror reference", () => {
+    const rows = equipmentTooltipStatRows({
+      name: "Endless Terror", slot: "RING", levelRequirement: 200, starForce: 23,
+      statLines: "", flameStats: "",
+      catalogBaseStats: { STR: 5, DEX: 5, INT: 5, LUK: 5, "Max HP": 250, "Max MP": 250, "Attack Power": 4, "Magic Attack": 4 },
+      catalogStarForceProfile: "ARMOR_ACCESSORY",
+    });
+    expect(Object.fromEntries(rows.map((row) => [row.key, row.total]))).toMatchObject({
+      STR: 150, DEX: 150, INT: 150, LUK: 150, MAX_HP: 505, MAX_MP: 250,
+      ATTACK_POWER: 131, MAGIC_ATTACK: 131, DEFENSE: 28,
+    });
+  });
+
+  it("matches the in-game 24-star Guardian Angel Ring reference", () => {
+    const rows = equipmentTooltipStatRows({
+      name: "Guardian Angel Ring", slot: "RING", levelRequirement: 160, starForce: 24,
+      statLines: "", flameStats: "",
+      catalogBaseStats: { STR: 5, DEX: 5, INT: 5, LUK: 5, "Max HP": 200, "Max MP": 200, "Attack Power": 2, "Magic Attack": 2 },
+      catalogStarForceProfile: "ARMOR_ACCESSORY",
+    });
+    expect(Object.fromEntries(rows.map((row) => [row.key, row.total]))).toMatchObject({
+      STR: 136, DEX: 136, INT: 136, LUK: 136, MAX_HP: 455, MAX_MP: 200,
+      ATTACK_POWER: 134, MAGIC_ATTACK: 134, DEFENSE: 30,
+    });
+  });
 });

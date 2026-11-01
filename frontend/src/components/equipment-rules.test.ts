@@ -33,5 +33,7 @@ describe("equipment semantic rules", () => {
     expect(itemStarForceCap("SECONDARY", "Astra", 200, "NONE", 3)).toBe(30);
     expect(itemStarForceCap("HAT", "Eternal Hat", 250, "ARMOR_ACCESSORY", null)).toBe(30);
     expect(itemStarForceCap("BADGE", "Ghost Ship Exorcist", 150, "NONE", null)).toBe(22);
+    expect(itemStarForceCap("WEAPON", "Genesis Dual Bowguns", 200, "WEAPON", null)).toBe(22);
+    expect(itemStarForceCap("WEAPON", "Destiny Dual Bowguns", 250, "WEAPON", null)).toBe(25);
   });
 });
