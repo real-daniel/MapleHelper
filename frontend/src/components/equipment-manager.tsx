@@ -5,7 +5,7 @@ import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { apiFetch } from "@/lib/api";
 import { potentialLineOptions, supportsPotential } from "@/components/potential-lines";
 import { isAstraSecondary, itemStarForceCap, supportsFlames, supportsItemPotential, type AstraStage } from "@/components/equipment-rules";
-import { equipmentJobGroups, isEquipmentJobGroupCompatible, resolveEquipmentName } from "@/components/equipment-names";
+import { equipmentJobGroups, isEquipmentJobGroupCompatible, isEquipmentSubclassCompatible, resolveEquipmentName } from "@/components/equipment-names";
 import { equipmentTooltipStatRows, starForceRows, type TooltipStatComponent } from "@/components/equipment-tooltip-stats";
 
 export type EquipmentSlot =
@@ -43,6 +43,7 @@ export type EquipmentItem = {
 
 type CatalogItem = {
   id: number;
+  mapleItemId: number | null;
   slot: string;
   name: string;
   levelRequirement: number | null;
@@ -689,6 +690,7 @@ function deduplicateCatalog(items: CatalogItem[], slot: EquipmentSlot, jobName: 
   const unique = new Map<string, CatalogItem>();
   for (const item of items) {
     if (!isEquipmentJobGroupCompatible(item.jobGroup, jobName)) continue;
+    if (!isEquipmentSubclassCompatible(slot, item.mapleItemId, item.name, jobName)) continue;
     const key = resolveEquipmentName(item.name, slot, jobName).toLowerCase();
     const existing = unique.get(key);
     if (!existing || (existing.namePattern && !item.namePattern)) unique.set(key, item);

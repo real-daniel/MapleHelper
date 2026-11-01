@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { equipmentJobGroup, equipmentJobGroups, isEquipmentJobGroupCompatible, resolveEquipmentName, type EquipmentJobGroup } from "./equipment-names";
+import { equipmentJobGroup, equipmentJobGroups, isEquipmentJobGroupCompatible, isEquipmentSubclassCompatible, resolveEquipmentName, type EquipmentJobGroup } from "./equipment-names";
 
 const CURRENT_GMS_JOBS: Record<EquipmentJobGroup, string[]> = {
   Warrior: ["Hero", "Paladin", "Dark Knight", "Dawn Warrior", "Mihile", "Aran", "Demon Slayer", "Demon Avenger", "Blaster", "Kaiser", "Adele", "Zero", "Hayato", "Ren", "Erel Light"],
@@ -50,5 +50,49 @@ describe("class-specific equipment names", () => {
   it("leaves exact and non-Eternal names unchanged", () => {
     expect(resolveEquipmentName("Eternal Knight Shoes", "SHOES", "Hero")).toBe("Eternal Knight Shoes");
     expect(resolveEquipmentName("Guardian Angel Ring", "RING", "Hero")).toBe("Guardian Angel Ring");
+  });
+});
+
+describe("subclass-specific weapons", () => {
+  it("shows Genesis and Destiny weapons only to jobs that use their weapon type", () => {
+    expect(isEquipmentSubclassCompatible("WEAPON", 1522000, "Genesis Dual Bowguns", "Mercedes")).toBe(true);
+    expect(isEquipmentSubclassCompatible("WEAPON", 1522000, "Destiny Dual Bowguns", "Bow Master")).toBe(false);
+    expect(isEquipmentSubclassCompatible("WEAPON", 1452000, "Genesis Bow", "Mercedes")).toBe(false);
+    expect(isEquipmentSubclassCompatible("WEAPON", 1592000, "Destiny Ancient Bow", "Pathfinder")).toBe(true);
+    expect(isEquipmentSubclassCompatible("WEAPON", 1215000, "Genesis Sword", "Ren")).toBe(true);
+    expect(isEquipmentSubclassCompatible("WEAPON", 1253000, "Destiny Celestial Light", "Sia Astelle")).toBe(true);
+    expect(isEquipmentSubclassCompatible("WEAPON", 1242000, "Genesis Energy Chain", "Xenon")).toBe(true);
+    expect(isEquipmentSubclassCompatible("WEAPON", 1242000, "Genesis Energy Chain", "Shadower")).toBe(false);
+  });
+
+  it("keeps shared weapon types available only to their valid jobs", () => {
+    expect(isEquipmentSubclassCompatible("WEAPON", 1402000, "Genesis Two-handed Sword", "Hero")).toBe(true);
+    expect(isEquipmentSubclassCompatible("WEAPON", 1402000, "Genesis Two-handed Sword", "Dawn Warrior")).toBe(true);
+    expect(isEquipmentSubclassCompatible("WEAPON", 1402000, "Genesis Two-handed Sword", "Dark Knight")).toBe(false);
+    expect(isEquipmentSubclassCompatible("WEAPON", 1342000, "Arcane Umbra Katara", "Blade Master")).toBe(false);
+  });
+});
+
+describe("subclass-specific secondary weapons", () => {
+  it("filters Princess No secondaries to their exact jobs", () => {
+    expect(isEquipmentSubclassCompatible("SECONDARY", 1352009, "Princess No's Accursed Arrow", "Mercedes")).toBe(true);
+    expect(isEquipmentSubclassCompatible("SECONDARY", 1352009, "Princess No's Accursed Arrow", "Bow Master")).toBe(false);
+    expect(isEquipmentSubclassCompatible("SECONDARY", 1352975, "Princess No's Floral Jewel", "Night Walker")).toBe(true);
+    expect(isEquipmentSubclassCompatible("SECONDARY", 1352975, "Princess No's Floral Jewel", "Night Lord")).toBe(false);
+    expect(isEquipmentSubclassCompatible("SECONDARY", 1099011, "Princess No's Accursed Shield", "Demon Avenger")).toBe(true);
+  });
+
+  it("filters Astra secondaries while preserving legitimate shared variants", () => {
+    expect(isEquipmentSubclassCompatible("SECONDARY", 1092123, "Astra Sacred Aegis", "Hero")).toBe(true);
+    expect(isEquipmentSubclassCompatible("SECONDARY", 1092123, "Astra Sacred Aegis", "Paladin")).toBe(true);
+    expect(isEquipmentSubclassCompatible("SECONDARY", 1092123, "Astra Sacred Aegis", "Dark Knight")).toBe(false);
+    expect(isEquipmentSubclassCompatible("SECONDARY", 1342121, "Astra Katara", "Blade Master")).toBe(true);
+    expect(isEquipmentSubclassCompatible("SECONDARY", 1342121, "Astra Katara", "Shadower")).toBe(false);
+    expect(isEquipmentSubclassCompatible("SECONDARY", null, "Astra Future Secondary", "Hero")).toBe(false);
+  });
+
+  it("does not affect universal secondary items or other slots", () => {
+    expect(isEquipmentSubclassCompatible("SECONDARY", null, "Generic Secondary", "Hero")).toBe(true);
+    expect(isEquipmentSubclassCompatible("HAT", 1000000, "Eternal Mage Hat", "Hero")).toBe(true);
   });
 });

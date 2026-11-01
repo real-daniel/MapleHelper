@@ -119,6 +119,183 @@ export function isEquipmentJobGroupCompatible(itemJobGroup: string | null, jobNa
   return equipmentJobGroups(jobName).some((jobGroup) => itemJobGroup.toLowerCase() === jobGroup.toLowerCase());
 }
 
+const WEAPON_JOBS_BY_ITEM_PREFIX: Record<number, string[]> = {
+  1212: ["Luminous"],
+  1213: ["Adele"],
+  1214: ["Kain"],
+  1215: ["Ren"],
+  1222: ["Angelic Buster"],
+  1232: ["Demon Avenger"],
+  1242: ["Xenon"],
+  1252: ["Lynn", "Beast Tamer"],
+  1253: ["Sia Astelle"],
+  1262: ["Kinesis"],
+  1272: ["Cadena"],
+  1282: ["Illium"],
+  1292: ["Hoyoung"],
+  1302: ["Hero", "Paladin", "Mihile"],
+  1312: ["Hero", "Demon Slayer"],
+  1322: ["Paladin", "Demon Slayer"],
+  1332: ["Shadower", "Blade Master", "Dual Blade"],
+  1342: [], // Kattaras belong in the secondary slot, not the primary weapon slot.
+  1362: ["Phantom"],
+  1372: ["Arch Mage (F/P)", "Arch Mage (I/L)", "Bishop", "Blaze Wizard", "Evan", "Lara"],
+  1382: ["Arch Mage (F/P)", "Arch Mage (I/L)", "Bishop", "Blaze Wizard", "Battle Mage", "Evan"],
+  1402: ["Hero", "Paladin", "Dawn Warrior", "Kaiser"],
+  1403: ["Mo Xuan"],
+  1404: ["Khali"],
+  1412: ["Hero"],
+  1422: ["Paladin"],
+  1432: ["Dark Knight"],
+  1433: ["Erel Light"],
+  1442: ["Dark Knight", "Aran"],
+  1452: ["Bow Master", "Bowmaster", "Wind Archer"],
+  1462: ["Marksman", "Wild Hunter"],
+  1472: ["Night Lord", "Night Walker"],
+  1482: ["Buccaneer", "Thunder Breaker", "Shade", "Ark"],
+  1492: ["Corsair", "Captain", "Mechanic", "Jett"],
+  1522: ["Mercedes"],
+  1532: ["Cannon Master", "Cannoneer"],
+  1542: ["Hayato"],
+  1552: ["Kanna"],
+  1562: ["Zero"],
+  1572: ["Zero"],
+  1582: ["Blaster"],
+  1592: ["Pathfinder"],
+};
+
+const SECONDARY_JOBS_BY_NAME: Record<string, string[]> = {
+  "princess no's soul shield": ["Mihile"],
+  "princess no's accursed shield": ["Demon Slayer", "Demon Avenger"],
+  "princess no's poisoned sword": ["Blade Master", "Dual Blade"],
+  "princess no's accursed arrow": ["Mercedes"],
+  "princess no's carte": ["Phantom"],
+  "princess no's medal": ["Hero"],
+  "princess no's rosary": ["Paladin"],
+  "princess no's flower chain": ["Dark Knight"],
+  "princess no's flaming book": ["Arch Mage (F/P)"],
+  "princess no's damp book": ["Arch Mage (I/L)"],
+  "princess no's golden book": ["Bishop"],
+  "princess no's feather": ["Bow Master", "Bowmaster"],
+  "princess no's wreath": ["Marksman"],
+  "princess no's purple shadow": ["Shadower"],
+  "princess no's charm": ["Night Lord"],
+  "princess no's soul orb": ["Luminous"],
+  "princess no's dragon essence": ["Kaiser"],
+  "princess no's soul ring": ["Angelic Buster"],
+  "princess no's magnum": ["Mechanic"],
+  "princess no's wakizashi": ["Hayato"],
+  "princess no's talisman": ["Kanna"],
+  "princess no's leaf": ["Lynn", "Beast Tamer"],
+  "princess no's orion fist": ["Jett"],
+  "princess no's skull armor": ["Buccaneer"],
+  "princess no's falcon eye": ["Corsair", "Captain"],
+  "princess no's fire bomb": ["Cannon Master", "Cannoneer"],
+  "princess no's flower ballast": ["Aran"],
+  "princess no's dragon legacy": ["Evan"],
+  "princess no's accursed marble": ["Battle Mage"],
+  "princess no's arrowhead": ["Wild Hunter"],
+  "princess no's floral jewel": ["Dawn Warrior", "Blaze Wizard", "Wind Archer", "Night Walker", "Thunder Breaker"],
+  "princess no's controller": ["Xenon"],
+  "princess no's fox marble": ["Shade"],
+  "princess no's oriental king chess piece": ["Kinesis"],
+  "princess no's transmitter": ["Cadena"],
+  "princess no's megaton charges": ["Blaster"],
+  "princess no's lucent wings": ["Illium"],
+  "princess no's path": ["Ark"],
+  "princess no's immortal relic": ["Pathfinder"],
+  "princess no's immortal weapon belt": ["Kain"],
+  "princess no's immortal bladebinder": ["Adele"],
+  "princess no's immortal hex seeker": ["Khali"],
+  "princess no's imugi gem": ["Ren"],
+  "princess no's immortal four-jade ornament": ["Lara"],
+  "princess no's fan tassel": ["Hoyoung"],
+  "princess no's brace band": ["Mo Xuan"],
+  "princess no's keir": ["Erel Light"],
+  "princess no's compass": ["Sia Astelle"],
+  "astra sacred aegis": ["Hero", "Paladin"],
+  "astra medallion": ["Hero"],
+  "astra rosary": ["Paladin"],
+  "astra chain": ["Dark Knight"],
+  "astra arcane shield": ["Arch Mage (F/P)", "Arch Mage (I/L)", "Bishop"],
+  "astra feather": ["Bow Master", "Bowmaster"],
+  "astra bullseye": ["Marksman"],
+  "astra relic": ["Pathfinder"],
+  "astra charm": ["Night Lord"],
+  "astra bane shield": ["Shadower"],
+  "astra katara": ["Blade Master", "Dual Blade"],
+  "astra wrist band": ["Buccaneer"],
+  "astra raven eye": ["Corsair", "Captain"],
+  "astra incendiary": ["Cannon Master", "Cannoneer"],
+  "astra topaz aegis": ["Dawn Warrior"],
+  "astra topaz": ["Dawn Warrior"],
+  "astra ruby shield": ["Blaze Wizard"],
+  "astra emerald": ["Wind Archer"],
+  "astra obsidian": ["Night Walker"],
+  "astra sapphire": ["Thunder Breaker"],
+  "astra white tiger pendulum": ["Aran"],
+  "astra honor shield": ["Evan"],
+  "astra magic arrows": ["Mercedes"],
+  "astra carte": ["Phantom"],
+  "astra fox marble": ["Shade"],
+  "astra orb": ["Luminous"],
+  "astra force shield": ["Demon Slayer", "Demon Avenger"],
+  "astra umbral shield": ["Battle Mage"],
+  "astra wild tusk": ["Wild Hunter"],
+  "astra magnum": ["Mechanic"],
+  "astra deca core controller": ["Xenon"],
+  "astra charges": ["Blaster"],
+  "astra kodachi": ["Hayato"],
+  "astra talisman": ["Kanna"],
+  "astra soul shield": ["Mihile"],
+  "astra nova essence": ["Kaiser"],
+  "astra weapon belt": ["Kain"],
+  "astra transmitter": ["Cadena"],
+  "astra soul ring": ["Angelic Buster"],
+  "astra hourglass": ["Zero"],
+  "astra king chess piece": ["Kinesis"],
+  "astra bladebinder": ["Adele"],
+  "astra lucent wings": ["Illium"],
+  "astra hex seeker": ["Khali"],
+  "astra path": ["Ark"],
+  "astra imugi gem": ["Ren"],
+  "astra four-jade ornament": ["Lara"],
+  "astra diamond fan tassel": ["Hoyoung"],
+  "astra leaf shield": ["Lynn", "Beast Tamer"],
+  "astra brace band": ["Mo Xuan"],
+  "astra keir": ["Erel Light"],
+  "astra compass": ["Sia Astelle"],
+};
+
+export function isEquipmentSubclassCompatible(slot: EquipmentSlot, mapleItemId: number | null, itemName: string, jobName: string) {
+  if (slot === "WEAPON") {
+    if (mapleItemId == null) return true;
+    const compatibleJobs = WEAPON_JOBS_BY_ITEM_PREFIX[Math.floor(mapleItemId / 1000)];
+    return compatibleJobs ? compatibleJobs.some((job) => sameJob(job, jobName)) : true;
+  }
+  if (slot !== "SECONDARY") return true;
+
+  const normalizedName = itemName.trim().toLowerCase();
+  const compatibleJobs = SECONDARY_JOBS_BY_NAME[normalizedName];
+  if (compatibleJobs) return compatibleJobs.some((job) => sameJob(job, jobName));
+  // Known class-bound families must be explicitly mapped before they can appear.
+  return !normalizedName.startsWith("princess no's ") && !normalizedName.startsWith("astra ");
+}
+
+function sameJob(expected: string, actual: string) {
+  const normalizedExpected = expected.trim().toLowerCase();
+  const normalizedActual = actual.trim().toLowerCase();
+  return normalizedExpected === normalizedActual
+    || (normalizedExpected === "bowmaster" && normalizedActual === "bow master")
+    || (normalizedExpected === "bow master" && normalizedActual === "bowmaster")
+    || (normalizedExpected === "dual blade" && normalizedActual === "blade master")
+    || (normalizedExpected === "blade master" && normalizedActual === "dual blade")
+    || (normalizedExpected === "cannoneer" && normalizedActual === "cannon master")
+    || (normalizedExpected === "cannon master" && normalizedActual === "cannoneer")
+    || (normalizedExpected === "captain" && normalizedActual === "corsair")
+    || (normalizedExpected === "corsair" && normalizedActual === "captain");
+}
+
 export function resolveEquipmentName(name: string, slot: EquipmentSlot, jobName: string) {
   const normalizedName = name.trim().toLowerCase();
   const jobGroup = equipmentJobGroup(jobName);
