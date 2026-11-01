@@ -6,6 +6,7 @@ import { apiFetch } from "@/lib/api";
 import { potentialLineOptions, supportsPotential } from "@/components/potential-lines";
 import { isAstraSecondary, itemStarForceCap, supportsFlames, supportsItemPotential, type AstraStage } from "@/components/equipment-rules";
 import { equipmentJobGroups, isEquipmentJobGroupCompatible, resolveEquipmentName } from "@/components/equipment-names";
+import { equipmentTooltipStatRows, starForceRows, type TooltipStatComponent } from "@/components/equipment-tooltip-stats";
 
 export type EquipmentSlot =
   | "RING" | "PENDANT" | "WEAPON" | "SECONDARY" | "EMBLEM"
@@ -32,6 +33,10 @@ export type EquipmentItem = {
   bonusPotentialTier: string;
   bonusPotentialLines: string;
   rawExtractedText: string;
+  catalogBaseStats: Record<string, number> | null;
+  catalogStarForceProfile: string | null;
+  catalogSetName: string | null;
+  catalogMapleItemId: number | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -46,6 +51,7 @@ type CatalogItem = {
   jobGroup: string | null;
   namePattern: boolean;
   starForceProfile: string | null;
+  baseStats: Record<string, number> | null;
 };
 
 type SlotDefinition = {
@@ -428,7 +434,7 @@ export function EquipmentManager({
               </details>}
 
               <details>
-                <summary>Additional stats</summary>
+                <summary>Displayed total stats (optional override)</summary>
                 <div className="flame-field-grid">
                   {BASE_ITEM_STAT_FIELDS.map((field) => <label key={field.key}>{field.label}<input type="number" min={0} value={parseFlameStats(draft.statLines).get(field.key) ?? ""} onChange={(event) => updateDisplayedStat(field.key, event.target.value)} /></label>)}
                 </div>
@@ -445,6 +451,7 @@ export function EquipmentManager({
           ref={tooltipRef}
           item={equipmentTooltip.item}
           slotLabel={equipmentTooltip.label}
+          characterJob={characterJob}
           position={tooltipPosition}
         />
       )}
@@ -456,18 +463,21 @@ function EquipmentTooltip({
   ref,
   item,
   slotLabel,
+  characterJob,
   position,
 }: {
   ref: React.Ref<HTMLDivElement>;
   item: EquipmentItem;
   slotLabel: string;
+  characterJob: string;
   position: { left: number; top: number } | null;
 }) {
-  const statLines = displayLines(item.statLines);
-  const flameLines = displayLines(item.flameStats);
+  const statRows = equipmentTooltipStatRows(item);
   const potentialLines = displayLines(item.potentialLines);
   const bonusPotentialLines = displayLines(item.bonusPotentialLines);
-  const hasDetails = statLines.length > 0 || flameLines.length > 0 || potentialLines.length > 0 || bonusPotentialLines.length > 0;
+  const starCap = itemStarForceCap(item.slot, item.name, item.levelRequirement, item.catalogStarForceProfile, item.astraStage, characterJob);
+  const groupedStars = starForceRows(item.starForce ?? 0, starCap);
+  const hasDetails = statRows.length > 0 || potentialLines.length > 0 || bonusPotentialLines.length > 0;
 
   return (
     <div
@@ -477,9 +487,13 @@ function EquipmentTooltip({
       role="tooltip"
       style={{ left: position?.left ?? 12, top: position?.top ?? 12, visibility: position ? "visible" : "hidden" }}
     >
-      {item.starForce != null && item.starForce > 0 && (
-        <div className="equipment-tooltip-stars" aria-label={`${item.starForce} Star Force`}>
-          {Array.from({ length: item.starForce }, (_, index) => <span key={index}>★</span>)}
+      {starCap > 0 && (
+        <div className="equipment-tooltip-stars" aria-label={`${item.starForce ?? 0} of ${starCap} Star Force`}>
+          {groupedStars.map((row, rowIndex) => <div className="equipment-tooltip-star-row" key={rowIndex}>
+            {row.map((group, groupIndex) => <span className="equipment-tooltip-star-group" key={groupIndex}>
+              {group.map((filled, starIndex) => <i className={filled ? "is-filled" : ""} key={starIndex}>★</i>)}
+            </span>)}
+          </div>)}
         </div>
       )}
       <header>
@@ -491,19 +505,21 @@ function EquipmentTooltip({
         <span className="equipment-tooltip-icon" style={{ backgroundImage: `url("${equipmentIconUrl(item)}")` }} />
         <div>
           <span>REQ LEV: <strong>{item.levelRequirement ?? "—"}</strong></span>
+          {starCap > 0 && <span>STAR FORCE: <strong>{item.starForce ?? 0} / {starCap}</strong></span>}
           {item.astraStage != null && <span>Astra phase: <strong>{romanNumeral(item.astraStage)}</strong></span>}
         </div>
       </div>
 
       <div className="equipment-tooltip-section equipment-tooltip-summary">
         <span>Equipment type: <strong>{slotLabel}</strong></span>
-        {statLines.map((line, index) => <span key={`${line}-${index}`}>{line}</span>)}
-        {flameLines.length > 0 && (
-          <>
-            <b className="equipment-tooltip-section-title flame">Bonus stats</b>
-            {flameLines.map((line, index) => <span className="flame" key={`${line}-${index}`}>{line}</span>)}
-          </>
-        )}
+        {item.catalogSetName && <span>Set: <strong>{item.catalogSetName}</strong></span>}
+        {statRows.length > 0 && <b className="equipment-tooltip-section-title">Item stats</b>}
+        {statRows.map((row) => <span className="equipment-tooltip-stat" key={row.key}>
+          <b>{row.label}: +{row.total.toLocaleString()}{row.percent ? "%" : ""}</b>
+          {row.components.length > 0 && <small>({row.components.map((component, index) => <span key={`${component.kind}-${index}`} className={`component-${component.kind}`}>
+            {index > 0 && <em> + </em>}{formatStatComponent(component, row.percent)}
+          </span>)})</small>}
+        </span>)}
         {!hasDetails && <span className="equipment-tooltip-empty">No detailed stats saved.</span>}
       </div>
 
@@ -528,6 +544,10 @@ function TooltipPotentialSection({ title, lines, bonus = false }: { title: strin
 
 function displayLines(value: string | null | undefined) {
   return (value ?? "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+}
+
+function formatStatComponent(component: TooltipStatComponent, percent: boolean) {
+  return `${component.value.toLocaleString()}${percent ? "%" : ""}`;
 }
 
 function tierClass(value: string) {
@@ -597,6 +617,10 @@ function emptyDraft(definition: SlotDefinition, presetNumber: number): Equipment
     bonusPotentialTier: "",
     bonusPotentialLines: "",
     rawExtractedText: "",
+    catalogBaseStats: null,
+    catalogStarForceProfile: null,
+    catalogSetName: null,
+    catalogMapleItemId: null,
   };
 }
 
@@ -619,6 +643,10 @@ function fromItem(item: EquipmentItem): EquipmentDraft {
     bonusPotentialTier: normalized.bonusPotentialTier,
     bonusPotentialLines: normalized.bonusPotentialLines,
     rawExtractedText: normalized.rawExtractedText,
+    catalogBaseStats: normalized.catalogBaseStats,
+    catalogStarForceProfile: normalized.catalogStarForceProfile,
+    catalogSetName: normalized.catalogSetName,
+    catalogMapleItemId: normalized.catalogMapleItemId,
   };
 }
 
@@ -635,6 +663,10 @@ export function normalizeEquipmentItem(item: EquipmentItem): EquipmentItem {
     potentialLines: item.potentialLines ?? "",
     bonusPotentialTier: item.bonusPotentialTier ?? "",
     bonusPotentialLines: item.bonusPotentialLines ?? "",
+    catalogBaseStats: item.catalogBaseStats ?? null,
+    catalogStarForceProfile: item.catalogStarForceProfile ?? null,
+    catalogSetName: item.catalogSetName ?? null,
+    catalogMapleItemId: item.catalogMapleItemId ?? null,
     rawExtractedText: item.rawExtractedText ?? "",
   };
 }

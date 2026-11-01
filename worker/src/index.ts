@@ -265,8 +265,8 @@ app.get("/api/v1/equipment", async (c) => {
   const profileId = profileParam ? pathId(profileParam) : null;
   if (profileId != null) await profileById(c.env.DB, profileId, userId);
   const statement = profileId == null
-    ? c.env.DB.prepare("SELECT * FROM equipment_items WHERE app_user_id=? ORDER BY updated_at DESC").bind(userId)
-    : c.env.DB.prepare("SELECT * FROM equipment_items WHERE app_user_id=? AND character_profile_id=? ORDER BY updated_at DESC").bind(userId, profileId);
+    ? c.env.DB.prepare(`${equipmentSelect()} WHERE e.app_user_id=? ORDER BY e.updated_at DESC`).bind(userId)
+    : c.env.DB.prepare(`${equipmentSelect()} WHERE e.app_user_id=? AND e.character_profile_id=? ORDER BY e.updated_at DESC`).bind(userId, profileId);
   const rows = await statement.all<Record<string, unknown>>();
   return c.json(rows.results.map(publicEquipment));
 });
@@ -301,7 +301,7 @@ app.get("/api/v1/equipment/catalog", async (c) => {
   const sql = `SELECT * FROM equipment_catalog_items${conditions.length ? ` WHERE ${conditions.join(" AND ")}` : ""} ORDER BY ${order}`;
   const statement = c.env.DB.prepare(sql).bind(...bindings);
   const rows = await statement.all<Record<string, unknown>>();
-  return c.json(rows.results.map((row) => ({ ...camelRow(row), namePattern: Boolean(row.name_pattern) })));
+  return c.json(rows.results.map(publicCatalogItem));
 });
 
 app.post("/api/v1/equipment/extract", async (c) => c.json(await extractEquipment(c.env, await c.req.formData())));
@@ -367,7 +367,7 @@ app.post("/api/v1/equipment", async (c) => {
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
     .bind(userId, profileId, catalogItemId, presetNumber, slot, slotIndex, values.name, values.level, values.stars, astra ? values.astraStage ?? 1 : null, values.stat, values.flame,
       values.flameScore, values.potentialTier, values.potential, values.bonusTier, values.bonus, values.raw, now, now).run();
-  const row = await c.env.DB.prepare("SELECT * FROM equipment_items WHERE id=? AND app_user_id=?")
+  const row = await c.env.DB.prepare(`${equipmentSelect()} WHERE e.id=? AND e.app_user_id=?`)
     .bind(result.meta.last_row_id, userId).first<Record<string, unknown>>();
   return c.json(publicEquipment(row!), 201);
 });
@@ -405,7 +405,36 @@ async function profileById(db: D1Database, id: number, userId: number) {
 
 function publicEquipment(row: Record<string, unknown>) {
   const { app_user_id: _private, ...visible } = row;
-  return camelRow(visible);
+  const result = camelRow(visible);
+  result.catalogBaseStats = parseJsonObject(result.catalogBaseStats);
+  return result;
+}
+
+function equipmentSelect() {
+  return `SELECT e.*, c.base_stats AS catalog_base_stats, c.star_force_profile AS catalog_star_force_profile,
+    c.set_name AS catalog_set_name, c.maple_item_id AS catalog_maple_item_id
+    FROM equipment_items e LEFT JOIN equipment_catalog_items c ON c.id=COALESCE(e.catalog_item_id, (
+      SELECT candidate.id FROM equipment_catalog_items candidate
+      WHERE candidate.name=e.name AND (candidate.slot=e.slot OR candidate.slot LIKE e.slot || '\\_%' ESCAPE '\\')
+      ORDER BY candidate.slot=e.slot DESC, candidate.id LIMIT 1
+    ))`;
+}
+
+function publicCatalogItem(row: Record<string, unknown>) {
+  const result: Record<string, unknown> = { ...camelRow(row), namePattern: Boolean(row.name_pattern) };
+  result.baseStats = parseJsonObject(result.baseStats);
+  return result;
+}
+
+function parseJsonObject(value: unknown): Record<string, number> | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    return Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, number] => typeof entry[1] === "number" && Number.isFinite(entry[1])));
+  } catch {
+    return null;
+  }
 }
 
 function publicBossEntry(row: Record<string, unknown>) {
