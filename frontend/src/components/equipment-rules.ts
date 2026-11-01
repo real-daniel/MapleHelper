@@ -59,6 +59,8 @@ export function itemStarForceCap(
   jobName?: string,
 ) {
   if (isAstraSecondary(slot, name)) return astraStarForceCap(name, astraStage, jobName);
+  if (slot === "WEAPON" && /^genesis\b/i.test(name.trim())) return 22;
+  if (slot === "WEAPON" && /^destiny\b/i.test(name.trim())) return 25;
   if (slot === "BADGE" && POTENTIAL_BADGE_EXCEPTIONS.has(name.trim().toLowerCase())) return 22;
   if (starForceProfile === "NONE") return 0;
   if (["EMBLEM", "POCKET", "BADGE", "MEDAL", "ANDROID", "TOTEM"].includes(slot)) return 0;

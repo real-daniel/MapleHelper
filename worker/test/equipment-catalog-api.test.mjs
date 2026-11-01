@@ -85,4 +85,21 @@ describe("equipment catalog API", () => {
     });
     expect(items[1].catalogBaseStats).toEqual(items[0].catalogBaseStats);
   });
+
+  it.each([
+    ["Genesis Dual Bowguns", 23, 22],
+    ["Destiny Dual Bowguns", 26, 25],
+  ])("enforces the named weapon Star Force cap for %s", async (name, starForce, cap) => {
+    const response = await app.request("/api/v1/equipment", {
+      method: "POST",
+      headers: {
+        Cookie: "MAPLEHELPER_SESSION=session-1; MAPLEHELPER_CSRF=test",
+        "X-XSRF-TOKEN": "test",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ slot: "WEAPON", name, levelRequirement: 250, starForce }),
+    }, env);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ message: `starForce cannot exceed ${cap} for this equipment.` });
+  });
 });

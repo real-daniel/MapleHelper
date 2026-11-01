@@ -357,7 +357,12 @@ app.post("/api/v1/equipment", async (c) => {
   const badgeCap = slot === "BADGE" && ["ghost ship exorcist", "sengoku hakase badge", "shackles of resentment"].includes(values.name.toLowerCase())
     ? 22
     : standardStarForceLimit(values.level);
-  const starForceCap = astra ? astraCap : badgeCap;
+  const namedWeaponCap = slot === "WEAPON" && /^genesis\b/i.test(values.name)
+    ? 22
+    : slot === "WEAPON" && /^destiny\b/i.test(values.name)
+      ? 25
+      : badgeCap;
+  const starForceCap = astra ? astraCap : namedWeaponCap;
   if (values.stars != null && values.stars > starForceCap) {
     throw new HttpError(400, `starForce cannot exceed ${starForceCap} for this equipment.`);
   }
