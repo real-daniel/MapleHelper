@@ -17,6 +17,30 @@ app.get("/oauth2/authorization/discord", beginDiscordLogin);
 app.get("/login/oauth2/code/discord", finishDiscordLogin);
 app.get("/api/v1/auth/csrf", issueCsrf);
 
+app.get("/api/v1/equipment-icons", async (c) => {
+  const name = c.req.query("name")?.trim();
+  if (!name || name.length > 120) throw new HttpError(400, "A valid equipment name is required.");
+  const levelValue = Number(c.req.query("level"));
+  const level = Number.isInteger(levelValue) && levelValue >= 0 && levelValue <= 300 ? levelValue : null;
+  const slotValue = c.req.query("slot")?.toUpperCase();
+  const slot = slotValue && EQUIPMENT_SLOTS.includes(slotValue as EquipmentSlot) ? slotValue as EquipmentSlot : null;
+  const cache = (caches as CacheStorage & { default: Cache }).default;
+  const cacheKey = new Request(c.req.url, { method: "GET" });
+  const cached = await cache.match(cacheKey);
+  if (cached) return cached;
+
+  const icon = await fetchEquipmentIcon(name, level, slot);
+  if (!icon) return c.body(null, 404);
+  const response = new Response(icon.body, {
+    headers: {
+      "Content-Type": icon.headers.get("Content-Type") ?? "image/png",
+      "Cache-Control": "public, max-age=604800, s-maxage=2592000",
+    },
+  });
+  c.executionCtx.waitUntil(cache.put(cacheKey, response.clone()));
+  return response;
+});
+
 app.use("/api/v1/auth/me", requireAuth);
 app.get("/api/v1/auth/me", (c) => c.json(currentUser(c)));
 app.use("/api/v1/auth/logout", requireAuth, requireCsrf);
@@ -241,8 +265,8 @@ app.get("/api/v1/equipment", async (c) => {
   const profileId = profileParam ? pathId(profileParam) : null;
   if (profileId != null) await profileById(c.env.DB, profileId, userId);
   const statement = profileId == null
-    ? c.env.DB.prepare("SELECT * FROM equipment_items WHERE app_user_id=? ORDER BY updated_at DESC").bind(userId)
-    : c.env.DB.prepare("SELECT * FROM equipment_items WHERE app_user_id=? AND character_profile_id=? ORDER BY updated_at DESC").bind(userId, profileId);
+    ? c.env.DB.prepare(`${equipmentSelect()} WHERE e.app_user_id=? ORDER BY e.updated_at DESC`).bind(userId)
+    : c.env.DB.prepare(`${equipmentSelect()} WHERE e.app_user_id=? AND e.character_profile_id=? ORDER BY e.updated_at DESC`).bind(userId, profileId);
   const rows = await statement.all<Record<string, unknown>>();
   return c.json(rows.results.map(publicEquipment));
 });
@@ -250,11 +274,34 @@ app.get("/api/v1/equipment", async (c) => {
 app.get("/api/v1/equipment/catalog", async (c) => {
   const slot = c.req.query("slot");
   if (slot && !EQUIPMENT_SLOTS.includes(slot as EquipmentSlot)) throw new HttpError(400, "Invalid equipment slot.");
-  const statement = slot
-    ? c.env.DB.prepare("SELECT * FROM equipment_catalog_items WHERE slot=? ORDER BY level_requirement, name").bind(slot)
-    : c.env.DB.prepare("SELECT * FROM equipment_catalog_items ORDER BY slot, level_requirement, name");
+  const jobGroupValue = c.req.query("jobGroup");
+  const equipmentJobGroups = ["Warrior", "Magician", "Bowman", "Thief", "Pirate"];
+  const jobGroups = jobGroupValue?.split(",").filter(Boolean) ?? [];
+  if (jobGroups.some((jobGroup) => !equipmentJobGroups.includes(jobGroup))) throw new HttpError(400, "Invalid equipment job group.");
+  const slotIndex = Number(c.req.query("slotIndex"));
+  const indexedSlot = slot === "RING" && Number.isInteger(slotIndex) && slotIndex >= 1 && slotIndex <= 4
+    ? `RING_${slotIndex}`
+    : slot === "PENDANT" && Number.isInteger(slotIndex) && slotIndex >= 1 && slotIndex <= 2
+      ? `PENDANT_${slotIndex}`
+      : null;
+  const conditions: string[] = [];
+  const bindings: string[] = [];
+  if (slot && indexedSlot) {
+    conditions.push("slot IN (?,?)");
+    bindings.push(slot, indexedSlot);
+  } else if (slot) {
+    conditions.push("slot=?");
+    bindings.push(slot);
+  }
+  if (jobGroups.length) {
+    conditions.push(`(job_group IS NULL OR job_group IN (${jobGroups.map(() => "?").join(",")}))`);
+    bindings.push(...jobGroups);
+  }
+  const order = slot ? "level_requirement, name" : "slot, level_requirement, name";
+  const sql = `SELECT * FROM equipment_catalog_items${conditions.length ? ` WHERE ${conditions.join(" AND ")}` : ""} ORDER BY ${order}`;
+  const statement = c.env.DB.prepare(sql).bind(...bindings);
   const rows = await statement.all<Record<string, unknown>>();
-  return c.json(rows.results.map((row) => ({ ...camelRow(row), namePattern: Boolean(row.name_pattern) })));
+  return c.json(rows.results.map(publicCatalogItem));
 });
 
 app.post("/api/v1/equipment/extract", async (c) => c.json(await extractEquipment(c.env, await c.req.formData())));
@@ -265,26 +312,36 @@ app.post("/api/v1/equipment", async (c) => {
   const body = asObject(await c.req.json());
   const userId = currentUser(c).id;
   const profileId = integerValue(body.characterProfileId, "characterProfileId", 1, Number.MAX_SAFE_INTEGER);
-  if (profileId != null) await profileById(c.env.DB, profileId, userId);
+  const profile = profileId != null ? await profileById(c.env.DB, profileId, userId) : null;
   const slot = body.slot;
   if (typeof slot !== "string" || !EQUIPMENT_SLOTS.includes(slot as EquipmentSlot)) throw new HttpError(400, "Invalid equipment slot.");
+  const catalogItemId = integerValue(body.catalogItemId, "catalogItemId", 1, Number.MAX_SAFE_INTEGER);
+  if (catalogItemId != null) {
+    const catalogItem = await c.env.DB.prepare("SELECT slot FROM equipment_catalog_items WHERE id=?")
+      .bind(catalogItemId).first<{ slot: string }>();
+    if (!catalogItem || catalogItem.slot.replace(/_(?:1|2|3|4)$/, "") !== slot) {
+      throw new HttpError(400, "catalogItemId does not match the selected equipment slot.");
+    }
+  }
+  const presetNumber = integerValue(body.presetNumber, "presetNumber", 1, 3) ?? 1;
   const capacity = equipmentSlotCapacity(slot as EquipmentSlot);
   const requestedSlotIndex = capacity === 1 ? null : integerValue(body.slotIndex, "slotIndex", 1, capacity);
   let slotIndex = resolveEquipmentSlotIndex(slot as EquipmentSlot, requestedSlotIndex, []);
   if (profileId != null && capacity > 1) {
-    const occupied = await c.env.DB.prepare("SELECT slot_index FROM equipment_items WHERE app_user_id=? AND character_profile_id=? AND slot=?")
-      .bind(userId, profileId, slot).all<{ slot_index: number | null }>();
+    const occupied = await c.env.DB.prepare("SELECT slot_index FROM equipment_items WHERE app_user_id=? AND character_profile_id=? AND preset_number=? AND slot=?")
+      .bind(userId, profileId, presetNumber, slot).all<{ slot_index: number | null }>();
     slotIndex = resolveEquipmentSlotIndex(slot as EquipmentSlot, requestedSlotIndex, occupied.results.map((row) => row.slot_index));
   }
   if (profileId != null) {
-    await c.env.DB.prepare("DELETE FROM equipment_items WHERE app_user_id=? AND character_profile_id=? AND slot=? AND slot_index IS ?")
-      .bind(userId, profileId, slot, slotIndex).run();
+    await c.env.DB.prepare("DELETE FROM equipment_items WHERE app_user_id=? AND character_profile_id=? AND preset_number=? AND slot=? AND slot_index IS ?")
+      .bind(userId, profileId, presetNumber, slot, slotIndex).run();
   }
   const now = new Date().toISOString();
   const values = {
     name: stringValue(body.name, "name", 120, true)!,
     level: integerValue(body.levelRequirement, "levelRequirement", 0, 300),
-    stars: integerValue(body.starForce, "starForce", 0, 25),
+    stars: integerValue(body.starForce, "starForce", 0, 30),
+    astraStage: integerValue(body.astraStage, "astraStage", 1, 3),
     stat: stringValue(body.statLines, "statLines", 4000),
     flame: stringValue(body.flameStats, "flameStats", 4000),
     flameScore: stringValue(body.flameScoreLines, "flameScoreLines", 4000),
@@ -294,13 +351,23 @@ app.post("/api/v1/equipment", async (c) => {
     bonus: stringValue(body.bonusPotentialLines, "bonusPotentialLines", 4000),
     raw: stringValue(body.rawExtractedText, "rawExtractedText", 8000),
   };
+  const astra = slot === "SECONDARY" && /^astra\b/i.test(values.name);
+  const astraAlwaysThirty = /astra (katara|talisman)/i.test(values.name) || /dual blade|kanna/i.test(String(profile?.job ?? ""));
+  const astraCap = astraAlwaysThirty ? 30 : values.astraStage === 3 ? 30 : values.astraStage === 2 ? 20 : 15;
+  const badgeCap = slot === "BADGE" && ["ghost ship exorcist", "sengoku hakase badge", "shackles of resentment"].includes(values.name.toLowerCase())
+    ? 22
+    : standardStarForceLimit(values.level);
+  const starForceCap = astra ? astraCap : badgeCap;
+  if (values.stars != null && values.stars > starForceCap) {
+    throw new HttpError(400, `starForce cannot exceed ${starForceCap} for this equipment.`);
+  }
   const result = await c.env.DB.prepare(`INSERT INTO equipment_items
-    (app_user_id,character_profile_id,slot,slot_index,name,level_requirement,star_force,stat_lines,flame_stats,
+    (app_user_id,character_profile_id,catalog_item_id,preset_number,slot,slot_index,name,level_requirement,star_force,astra_stage,stat_lines,flame_stats,
      flame_score_lines,potential_tier,potential_lines,bonus_potential_tier,bonus_potential_lines,raw_extracted_text,created_at,updated_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-    .bind(userId, profileId, slot, slotIndex, values.name, values.level, values.stars, values.stat, values.flame,
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .bind(userId, profileId, catalogItemId, presetNumber, slot, slotIndex, values.name, values.level, values.stars, astra ? values.astraStage ?? 1 : null, values.stat, values.flame,
       values.flameScore, values.potentialTier, values.potential, values.bonusTier, values.bonus, values.raw, now, now).run();
-  const row = await c.env.DB.prepare("SELECT * FROM equipment_items WHERE id=? AND app_user_id=?")
+  const row = await c.env.DB.prepare(`${equipmentSelect()} WHERE e.id=? AND e.app_user_id=?`)
     .bind(result.meta.last_row_id, userId).first<Record<string, unknown>>();
   return c.json(publicEquipment(row!), 201);
 });
@@ -319,6 +386,15 @@ function pathId(value: string): number {
   return id;
 }
 
+function standardStarForceLimit(level: number | null) {
+  if (level == null || level >= 138) return 30;
+  if (level >= 128) return 20;
+  if (level >= 118) return 15;
+  if (level >= 108) return 10;
+  if (level >= 95) return 8;
+  return 5;
+}
+
 async function profileById(db: D1Database, id: number, userId: number) {
   const row = await db.prepare(`SELECT id,name,world,job,region,weekly_rank,weekly_experience,image_url,source_url,
     retrieved_at,created_at,updated_at FROM character_profiles WHERE id=? AND app_user_id=?`)
@@ -329,7 +405,36 @@ async function profileById(db: D1Database, id: number, userId: number) {
 
 function publicEquipment(row: Record<string, unknown>) {
   const { app_user_id: _private, ...visible } = row;
-  return camelRow(visible);
+  const result = camelRow(visible);
+  result.catalogBaseStats = parseJsonObject(result.catalogBaseStats);
+  return result;
+}
+
+function equipmentSelect() {
+  return `SELECT e.*, c.base_stats AS catalog_base_stats, c.star_force_profile AS catalog_star_force_profile,
+    c.set_name AS catalog_set_name, c.maple_item_id AS catalog_maple_item_id
+    FROM equipment_items e LEFT JOIN equipment_catalog_items c ON c.id=COALESCE(e.catalog_item_id, (
+      SELECT candidate.id FROM equipment_catalog_items candidate
+      WHERE candidate.name=e.name AND (candidate.slot=e.slot OR candidate.slot LIKE e.slot || '\\_%' ESCAPE '\\')
+      ORDER BY candidate.slot=e.slot DESC, candidate.id LIMIT 1
+    ))`;
+}
+
+function publicCatalogItem(row: Record<string, unknown>) {
+  const result: Record<string, unknown> = { ...camelRow(row), namePattern: Boolean(row.name_pattern) };
+  result.baseStats = parseJsonObject(result.baseStats);
+  return result;
+}
+
+function parseJsonObject(value: unknown): Record<string, number> | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    return Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, number] => typeof entry[1] === "number" && Number.isFinite(entry[1])));
+  } catch {
+    return null;
+  }
 }
 
 function publicBossEntry(row: Record<string, unknown>) {
@@ -338,6 +443,85 @@ function publicBossEntry(row: Record<string, unknown>) {
     tracked: Boolean(row.tracked),
     cleared: Boolean(row.cleared),
   };
+}
+
+type MapleStoryIoItem = {
+  id: number;
+  name: string;
+  requiredLevel?: number | null;
+  typeInfo?: { overallCategory?: string; category?: string; subCategory?: string };
+};
+
+let gmsVersionPromise: Promise<string> | null = null;
+
+async function fetchEquipmentIcon(name: string, level: number | null, slot: EquipmentSlot | null) {
+  try {
+    const version = await currentGmsVersion();
+    const searchName = equipmentIconSearchName(name, slot);
+    const search = new URL(`https://maplestory.io/api/GMS/${version}/item`);
+    search.search = new URLSearchParams({ searchFor: searchName, count: "50" }).toString();
+    const searchResponse = await fetch(search, { headers: { Accept: "application/json" } });
+    if (!searchResponse.ok) return null;
+    const items = await searchResponse.json<MapleStoryIoItem[]>();
+    const match = items
+      .filter((item) => item.typeInfo?.overallCategory === "Equip")
+      .map((item) => ({ item, score: equipmentIconScore(item, searchName, level, slot) }))
+      .sort((left, right) => right.score - left.score)[0];
+    if (!match || match.score < 20) return null;
+    const iconResponse = await fetch(`https://maplestory.io/api/GMS/${version}/item/${match.item.id}/icon`);
+    return iconResponse.ok ? iconResponse : null;
+  } catch (error) {
+    console.error("Equipment icon lookup failed", error);
+    return null;
+  }
+}
+
+function equipmentIconSearchName(name: string, slot: EquipmentSlot | null) {
+  if (["chaos root abyss", "root abyss"].includes(name.toLowerCase())) {
+    if (slot === "HAT") return "Royal Warrior Helm";
+    if (slot === "TOP") return "Eagle Eye Warrior Armor";
+    if (slot === "BOTTOM") return "Trixter Warrior Pants";
+  }
+  return name;
+}
+
+async function currentGmsVersion() {
+  if (!gmsVersionPromise) {
+    gmsVersionPromise = fetch("https://maplestory.io/api/wz")
+      .then((response) => {
+        if (!response.ok) throw new Error(`MapleStory.IO version lookup failed (${response.status}).`);
+        return response.json<Array<{ region: string; mapleVersionId: string; isReady: boolean; hasImages: boolean }>>();
+      })
+      .then((versions) => versions
+        .filter((version) => version.region === "GMS" && version.isReady && version.hasImages && /^\d+$/.test(version.mapleVersionId))
+        .sort((left, right) => Number(right.mapleVersionId) - Number(left.mapleVersionId))[0]?.mapleVersionId ?? "270")
+      .catch((error) => {
+        gmsVersionPromise = null;
+        throw error;
+      });
+  }
+  return gmsVersionPromise;
+}
+
+function equipmentIconScore(item: MapleStoryIoItem, name: string, level: number | null, slot: EquipmentSlot | null) {
+  const candidate = item.name.toLowerCase();
+  const requested = name.toLowerCase();
+  let score = candidate === requested ? 100 : candidate.startsWith(requested) ? 65 : candidate.includes(requested) ? 40 : 0;
+  if (level != null && item.requiredLevel === level) score += 30;
+  const category = `${item.typeInfo?.category ?? ""} ${item.typeInfo?.subCategory ?? ""}`.toLowerCase();
+  if (slot && slotIconHints(slot).some((hint) => category.includes(hint))) score += 35;
+  return score;
+}
+
+function slotIconHints(slot: EquipmentSlot): string[] {
+  const hints: Partial<Record<EquipmentSlot, string[]>> = {
+    RING: ["ring"], PENDANT: ["pendant"], WEAPON: ["weapon"], SECONDARY: ["secondary", "shield"],
+    EMBLEM: ["emblem"], HAT: ["hat", "cap"], FACE: ["face"], EYE: ["eye"], EARRINGS: ["earring"],
+    TOP: ["coat", "top"], BOTTOM: ["pants", "bottom"], SHOES: ["shoe"], GLOVES: ["glove"],
+    CAPE: ["cape"], BELT: ["belt"], SHOULDER: ["shoulder"], POCKET: ["pocket"], BADGE: ["badge"],
+    MEDAL: ["medal"], ANDROID: ["android"], HEART: ["heart"], TOTEM: ["totem"],
+  };
+  return hints[slot] ?? [];
 }
 
 export default app;

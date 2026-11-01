@@ -12,7 +12,10 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" data-theme="dark" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: `try{document.documentElement.dataset.theme=localStorage.getItem('maplehelper-theme')==='light'?'light':'dark'}catch(e){}` }} />
+      </head>
       <body className={`${geist.variable} ${geistMono.variable}`}>{children}</body>
     </html>
   );

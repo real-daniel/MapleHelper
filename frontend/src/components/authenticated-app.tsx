@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { AppTabs } from "@/components/app-tabs";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { API_BASE_URL, apiFetch, clearCsrfToken } from "@/lib/api";
 
 type AuthenticatedUser = {
@@ -51,15 +52,16 @@ export function AuthenticatedApp() {
   }
 
   if (checking) {
-    return <main className="auth-screen"><p>Checking Discord sign-in...</p></main>;
+    return <main className="auth-screen"><ThemeToggle /><p>Checking sign-in…</p></main>;
   }
 
   if (!user) {
     return (
       <main className="auth-screen">
+        <ThemeToggle />
         <section className="auth-card">
+          <span className="brand-mark auth-mark">M</span>
           <h1>MapleHelper</h1>
-          <p>Sign in with Discord to keep your characters and equipment private.</p>
           {message && <p className="message">{message}</p>}
           <a className="discord-login" href={`${API_BASE_URL}/oauth2/authorization/discord`}>
             Sign in with Discord
@@ -74,11 +76,12 @@ export function AuthenticatedApp() {
       <header className="auth-bar">
         <div className="brand-lockup">
           <span className="brand-mark">M</span>
-          <div><strong>MapleHelper</strong><small>Your progression companion</small></div>
+          <strong>MapleHelper</strong>
         </div>
         <div className="auth-user">
           {user.avatarUrl && <Image src={user.avatarUrl} alt="" width={36} height={36} />}
-          <span><small>Signed in as</small><strong>{user.displayName}</strong></span>
+          <span><strong>{user.displayName}</strong></span>
+          <ThemeToggle />
           <button className="ghost-button" type="button" onClick={logout}>Sign out</button>
         </div>
       </header>
