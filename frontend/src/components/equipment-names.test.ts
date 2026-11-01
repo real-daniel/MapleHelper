@@ -1,13 +1,35 @@
 import { describe, expect, it } from "vitest";
-import { equipmentJobGroup, resolveEquipmentName } from "./equipment-names";
+import { equipmentJobGroup, equipmentJobGroups, isEquipmentJobGroupCompatible, resolveEquipmentName, type EquipmentJobGroup } from "./equipment-names";
+
+const CURRENT_GMS_JOBS: Record<EquipmentJobGroup, string[]> = {
+  Warrior: ["Hero", "Paladin", "Dark Knight", "Dawn Warrior", "Mihile", "Aran", "Demon Slayer", "Demon Avenger", "Blaster", "Kaiser", "Adele", "Zero", "Hayato", "Ren", "Erel Light"],
+  Magician: ["Arch Mage (F/P)", "Arch Mage (I/L)", "Bishop", "Blaze Wizard", "Battle Mage", "Evan", "Luminous", "Kinesis", "Illium", "Lara", "Kanna", "Lynn", "Sia Astelle"],
+  Bowman: ["Bow Master", "Marksman", "Pathfinder", "Wind Archer", "Wild Hunter", "Mercedes", "Kain"],
+  Thief: ["Night Lord", "Shadower", "Blade Master", "Night Walker", "Phantom", "Cadena", "Khali", "Hoyoung", "Xenon"],
+  Pirate: ["Buccaneer", "Cannon Master", "Corsair", "Thunder Breaker", "Shade", "Ark", "Angelic Buster", "Mechanic", "Mo Xuan", "Xenon"],
+};
 
 describe("class-specific equipment names", () => {
-  it("maps character jobs to their equipment group", () => {
-    expect(equipmentJobGroup("Hero")).toBe("Warrior");
-    expect(equipmentJobGroup("Bishop")).toBe("Magician");
-    expect(equipmentJobGroup("Wind Archer")).toBe("Bowman");
+  it.each(Object.entries(CURRENT_GMS_JOBS).flatMap(([group, jobs]) => jobs.map((job) => [job, group])))
+  ("maps %s to %s equipment", (job, group) => {
+    expect(equipmentJobGroups(job)).toContain(group);
+  });
+
+  it("supports current Nexon labels, legacy aliases, hybrids, and beginners", () => {
+    expect(equipmentJobGroup("Bowmaster")).toBe("Bowman");
     expect(equipmentJobGroup("Dual Blade")).toBe("Thief");
-    expect(equipmentJobGroup("Angelic Buster")).toBe("Pirate");
+    expect(equipmentJobGroup("Cannoneer")).toBe("Pirate");
+    expect(equipmentJobGroup("Erel")).toBe("Warrior");
+    expect(equipmentJobGroups("Xenon")).toEqual(["Thief", "Pirate"]);
+    expect(equipmentJobGroups("Noblesse")).toEqual([]);
+  });
+
+  it("does not expose class-restricted equipment when a job is unknown", () => {
+    expect(isEquipmentJobGroupCompatible("Warrior", "Unknown New Class")).toBe(false);
+    expect(isEquipmentJobGroupCompatible("Magician", "Erel")).toBe(false);
+    expect(isEquipmentJobGroupCompatible("Warrior", "Erel")).toBe(true);
+    expect(isEquipmentJobGroupCompatible("Pirate", "Xenon")).toBe(true);
+    expect(isEquipmentJobGroupCompatible(null, "Unknown New Class")).toBe(true);
   });
 
   it("expands generic class-set armor to its exact in-game name", () => {

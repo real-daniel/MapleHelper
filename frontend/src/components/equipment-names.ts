@@ -1,21 +1,21 @@
 import type { EquipmentSlot } from "./equipment-manager";
 
-type EquipmentJobGroup = "Warrior" | "Magician" | "Bowman" | "Thief" | "Pirate";
+export type EquipmentJobGroup = "Warrior" | "Magician" | "Bowman" | "Thief" | "Pirate";
 
 const JOB_GROUP_PATTERNS: Array<[EquipmentJobGroup, string[]]> = [
   ["Magician", [
     "arch mage", "bishop", "blaze wizard", "battle mage", "evan", "luminous", "kinesis",
-    "illium", "lara", "kanna", "lynn", "beast tamer", "sia astelle", "erel light",
+    "illium", "lara", "kanna", "lynn", "beast tamer", "sia astelle",
   ]],
-  ["Bowman", ["bowmaster", "marksman", "pathfinder", "wind archer", "wild hunter", "mercedes", "kain"]],
-  ["Thief", ["night lord", "shadower", "dual blade", "night walker", "phantom", "cadena", "khali", "hoyoung", "xenon"]],
+  ["Bowman", ["bow master", "bowmaster", "marksman", "pathfinder", "wind archer", "wild hunter", "mercedes", "kain"]],
+  ["Thief", ["night lord", "shadower", "blade master", "dual blade", "night walker", "phantom", "cadena", "khali", "hoyoung", "xenon"]],
   ["Pirate", [
-    "buccaneer", "cannoneer", "corsair", "captain", "thunder breaker", "shade", "ark",
-    "angelic buster", "mechanic", "mo xuan", "jett",
+    "buccaneer", "cannon master", "cannoneer", "corsair", "captain", "thunder breaker", "shade", "ark",
+    "angelic buster", "mechanic", "mo xuan", "jett", "xenon",
   ]],
   ["Warrior", [
     "hero", "paladin", "dark knight", "dawn warrior", "mihile", "aran", "demon slayer",
-    "demon avenger", "blaster", "kaiser", "adele", "zero", "hayato", "ren",
+    "demon avenger", "blaster", "kaiser", "adele", "zero", "hayato", "ren", "erel",
   ]],
 ];
 
@@ -104,8 +104,19 @@ const CLASS_SET_NAMES: Record<string, ClassSetNames> = {
 };
 
 export function equipmentJobGroup(jobName: string): EquipmentJobGroup | null {
+  return equipmentJobGroups(jobName)[0] ?? null;
+}
+
+export function equipmentJobGroups(jobName: string): EquipmentJobGroup[] {
   const normalized = jobName.trim().toLowerCase();
-  return JOB_GROUP_PATTERNS.find(([, patterns]) => patterns.some((pattern) => normalized.includes(pattern)))?.[0] ?? null;
+  return JOB_GROUP_PATTERNS
+    .filter(([, patterns]) => patterns.some((pattern) => normalized.includes(pattern)))
+    .map(([group]) => group);
+}
+
+export function isEquipmentJobGroupCompatible(itemJobGroup: string | null, jobName: string) {
+  if (!itemJobGroup) return true;
+  return equipmentJobGroups(jobName).some((jobGroup) => itemJobGroup.toLowerCase() === jobGroup.toLowerCase());
 }
 
 export function resolveEquipmentName(name: string, slot: EquipmentSlot, jobName: string) {

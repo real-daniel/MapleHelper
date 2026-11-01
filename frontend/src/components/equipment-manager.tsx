@@ -5,7 +5,7 @@ import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { apiFetch } from "@/lib/api";
 import { potentialLineOptions, supportsPotential } from "@/components/potential-lines";
 import { isAstraSecondary, itemStarForceCap, supportsFlames, supportsItemPotential, type AstraStage } from "@/components/equipment-rules";
-import { equipmentJobGroup, resolveEquipmentName } from "@/components/equipment-names";
+import { equipmentJobGroups, isEquipmentJobGroupCompatible, resolveEquipmentName } from "@/components/equipment-names";
 
 export type EquipmentSlot =
   | "RING" | "PENDANT" | "WEAPON" | "SECONDARY" | "EMBLEM"
@@ -159,6 +159,8 @@ export function EquipmentManager({
     try {
       const query = new URLSearchParams({ slot: definition.slot });
       if (definition.slotIndex != null) query.set("slotIndex", String(definition.slotIndex));
+      const jobGroups = equipmentJobGroups(characterJob);
+      if (jobGroups.length) query.set("jobGroup", jobGroups.join(","));
       const response = await apiFetch(`/api/v1/equipment/catalog?${query}`);
       const body = await readBody(response);
       if (!response.ok) throw new Error(responseMessage(body, "Could not load equipment catalog."));
@@ -652,10 +654,9 @@ function equipmentIconUrl(item: EquipmentItem) {
 }
 
 function deduplicateCatalog(items: CatalogItem[], slot: EquipmentSlot, jobName: string) {
-  const jobGroup = equipmentJobGroup(jobName);
   const unique = new Map<string, CatalogItem>();
   for (const item of items) {
-    if (item.jobGroup && jobGroup && item.jobGroup.toLowerCase() !== jobGroup.toLowerCase()) continue;
+    if (!isEquipmentJobGroupCompatible(item.jobGroup, jobName)) continue;
     const key = resolveEquipmentName(item.name, slot, jobName).toLowerCase();
     const existing = unique.get(key);
     if (!existing || (existing.namePattern && !item.namePattern)) unique.set(key, item);
