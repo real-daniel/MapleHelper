@@ -38,6 +38,8 @@ describe("equipment catalog API", () => {
     const insert = database.prepare("INSERT INTO equipment_catalog_items(slot,name,job_group) VALUES (?,?,?)");
     for (const group of ["Warrior", "Magician", "Bowman", "Thief", "Pirate"]) insert.run("HAT", `Eternal ${group} Hat`, group);
     insert.run("HAT", "Universal Hat", null);
+    for (const name of ["Fairy Heart", "Plasma Heart", "Black Heart", "Total Control"]) insert.run("HEART", name, null);
+    database.exec(readFileSync(new URL("../../migrations/0011_mechanical_heart_star_force.sql", import.meta.url), "utf8"));
     database.prepare("UPDATE equipment_catalog_items SET base_stats=?,star_force_profile='ARMOR_ACCESSORY',set_name='Eternal',maple_item_id=1005982 WHERE name='Eternal Bowman Hat'")
       .run('{"DEX":50,"Attack Power":6}');
     env = { DB: d1(database), APP_URL: "http://localhost:8787" };
@@ -84,6 +86,40 @@ describe("equipment catalog API", () => {
       catalogSetName: "Eternal", catalogMapleItemId: 1005982,
     });
     expect(items[1].catalogBaseStats).toEqual(items[0].catalogBaseStats);
+  });
+
+  it("marks enhanceable hearts for Star Force and keeps Black Heart fixed", async () => {
+    const response = await request("?slot=HEART");
+    expect(response.status).toBe(200);
+    const hearts = await response.json();
+    expect(hearts.find((item) => item.name === "Fairy Heart")?.starForceProfile).toBe("ARMOR_ACCESSORY");
+    expect(hearts.find((item) => item.name === "Plasma Heart")?.starForceProfile).toBe("ARMOR_ACCESSORY");
+    expect(hearts.find((item) => item.name === "Total Control")?.starForceProfile).toBe("ARMOR_ACCESSORY");
+    expect(hearts.find((item) => item.name === "Black Heart")).toMatchObject({
+      starForceProfile: "NONE",
+      baseStats: { STR: 50, DEX: 50, INT: 50, LUK: 50, "Attack Power": 77, "Magic Attack": 77 },
+    });
+  });
+
+  it("canonicalizes Black Heart's fixed stars and potential when saving", async () => {
+    const response = await app.request("/api/v1/equipment", {
+      method: "POST",
+      headers: {
+        Cookie: "MAPLEHELPER_SESSION=session-1; MAPLEHELPER_CSRF=test",
+        "X-XSRF-TOKEN": "test",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        slot: "HEART", name: "Black Heart", levelRequirement: 120, starForce: 0,
+        potentialTier: "Legendary", potentialLines: "STR +12%",
+      }),
+    }, env);
+    expect(response.status).toBe(201);
+    expect(await response.json()).toMatchObject({
+      starForce: 15,
+      potentialTier: "Epic",
+      potentialLines: "Boss Damage +30%\nIgnore Enemy Defense +30%",
+    });
   });
 
   it.each([

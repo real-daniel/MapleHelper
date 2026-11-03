@@ -4,7 +4,10 @@ import Image from "next/image";
 import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { apiFetch } from "@/lib/api";
 import { potentialLineOptions, supportsPotential } from "@/components/potential-lines";
-import { isAstraSecondary, itemStarForceCap, supportsFlames, supportsItemPotential, type AstraStage } from "@/components/equipment-rules";
+import {
+  BLACK_HEART_POTENTIAL_LINES, BLACK_HEART_POTENTIAL_TIER, BLACK_HEART_STAR_FORCE,
+  isAstraSecondary, isBlackHeart, itemStarForceCap, supportsFlames, supportsItemPotential, type AstraStage,
+} from "@/components/equipment-rules";
 import { equipmentJobGroups, isEquipmentJobGroupCompatible, isEquipmentSubclassCompatible, resolveEquipmentName } from "@/components/equipment-names";
 import { equipmentTooltipStatRows, starForceRows, type TooltipStatComponent } from "@/components/equipment-tooltip-stats";
 
@@ -198,17 +201,18 @@ export function EquipmentManager({
       const levelRequirement = name ? item?.levelRequirement ?? current.levelRequirement : null;
       const astraStage = isAstraSecondary(current.slot, resolvedName) ? current.astraStage ?? 1 : null;
       const cap = itemStarForceCap(current.slot, resolvedName, levelRequirement, item?.starForceProfile, astraStage, characterJob);
+      const blackHeart = isBlackHeart(current.slot, resolvedName);
       return {
         ...current,
         catalogItemId: item?.id ?? null,
         name: resolvedName,
         levelRequirement,
         astraStage,
-        starForce: current.starForce != null && current.starForce > cap ? cap : current.starForce,
+        starForce: blackHeart ? BLACK_HEART_STAR_FORCE : current.starForce != null && current.starForce > cap ? cap : current.starForce,
         flameStats: supportsFlames(current.slot, resolvedName) ? current.flameStats : "",
         flameScoreLines: supportsFlames(current.slot, resolvedName) ? current.flameScoreLines : "",
-        potentialTier: supportsItemPotential(current.slot, resolvedName) ? current.potentialTier : "",
-        potentialLines: supportsItemPotential(current.slot, resolvedName) ? current.potentialLines : "",
+        potentialTier: blackHeart ? BLACK_HEART_POTENTIAL_TIER : supportsItemPotential(current.slot, resolvedName) ? current.potentialTier : "",
+        potentialLines: blackHeart ? BLACK_HEART_POTENTIAL_LINES : supportsItemPotential(current.slot, resolvedName) ? current.potentialLines : "",
       };
     });
   }
@@ -262,11 +266,11 @@ export function EquipmentManager({
     try {
       const payload = {
         ...draft,
-        starForce: starForceCap > 0 ? draft.starForce : null,
+        starForce: isBlackHeart(draft.slot, draft.name) ? BLACK_HEART_STAR_FORCE : starForceCap > 0 ? draft.starForce : null,
         flameStats: supportsFlames(draft.slot, draft.name) ? draft.flameStats : "",
         flameScoreLines: supportsFlames(draft.slot, draft.name) ? draft.flameScoreLines : "",
-        potentialTier: supportsItemPotential(draft.slot, draft.name) ? draft.potentialTier : "",
-        potentialLines: supportsItemPotential(draft.slot, draft.name) ? draft.potentialLines : "",
+        potentialTier: isBlackHeart(draft.slot, draft.name) ? BLACK_HEART_POTENTIAL_TIER : supportsItemPotential(draft.slot, draft.name) ? draft.potentialTier : "",
+        potentialLines: isBlackHeart(draft.slot, draft.name) ? BLACK_HEART_POTENTIAL_LINES : supportsItemPotential(draft.slot, draft.name) ? draft.potentialLines : "",
         characterProfileId: profileId,
         rawExtractedText: "",
       };
@@ -403,7 +407,7 @@ export function EquipmentManager({
 
               <div className="field-grid">
                 <label>Original level<input type="number" min={0} max={300} value={draft.levelRequirement ?? ""} onChange={(event) => updateLevel(event.target.value)} /></label>
-                {starForceCap > 0 && <label>Star Force<input type="number" min={0} max={starForceCap} value={draft.starForce ?? ""} onChange={(event) => update("starForce", nullableNumber(event.target.value))} /></label>}
+                {starForceCap > 0 && <label>Star Force<input type="number" min={0} max={starForceCap} disabled={isBlackHeart(draft.slot, draft.name)} value={isBlackHeart(draft.slot, draft.name) ? BLACK_HEART_STAR_FORCE : draft.starForce ?? ""} onChange={(event) => update("starForce", nullableNumber(event.target.value))} /></label>}
               </div>
 
               {isAstraSecondary(draft.slot, draft.name) && <label>Astra phase
@@ -424,12 +428,12 @@ export function EquipmentManager({
 
               {supportsPotential(draft.slot) && supportsItemPotential(draft.slot, draft.name) && <details open>
                 <summary>Potential</summary>
-                <label>Tier<select value={draft.potentialTier} onChange={(event) => { update("potentialTier", event.target.value); update("potentialLines", ""); }}>{potentialTierOptions()}</select></label>
+                <label>Tier<select value={draft.potentialTier} disabled={isBlackHeart(draft.slot, draft.name)} onChange={(event) => { update("potentialTier", event.target.value); update("potentialLines", ""); }}>{potentialTierOptions()}</select></label>
                 <div className="potential-line-list">
                   {[0, 1, 2].map((index) => {
                     const current = parsePotentialLines(draft.potentialLines)[index] ?? "";
                     const options = potentialLineOptions(draft.slot, draft.potentialTier, index, draft.levelRequirement, characterJob);
-                    return <label key={index}>Line {index + 1}<select value={current} disabled={!draft.potentialTier} onChange={(event) => updatePotentialLine(index, event.target.value)}><option value="">None</option>{current && !options.includes(current) && <option value={current}>{current}</option>}{options.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>;
+                    return <label key={index}>Line {index + 1}<select value={current} disabled={!draft.potentialTier || isBlackHeart(draft.slot, draft.name)} onChange={(event) => updatePotentialLine(index, event.target.value)}><option value="">None</option>{current && !options.includes(current) && <option value={current}>{current}</option>}{options.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>;
                   })}
                 </div>
               </details>}
@@ -474,10 +478,12 @@ function EquipmentTooltip({
   position: { left: number; top: number } | null;
 }) {
   const statRows = equipmentTooltipStatRows(item);
-  const potentialLines = displayLines(item.potentialLines);
+  const blackHeart = isBlackHeart(item.slot, item.name);
+  const potentialLines = displayLines(blackHeart ? BLACK_HEART_POTENTIAL_LINES : item.potentialLines);
   const bonusPotentialLines = displayLines(item.bonusPotentialLines);
   const starCap = itemStarForceCap(item.slot, item.name, item.levelRequirement, item.catalogStarForceProfile, item.astraStage, characterJob);
-  const groupedStars = starForceRows(item.starForce ?? 0, starCap);
+  const displayedStarForce = blackHeart ? BLACK_HEART_STAR_FORCE : item.starForce ?? 0;
+  const groupedStars = starForceRows(displayedStarForce, starCap);
   const hasDetails = statRows.length > 0 || potentialLines.length > 0 || bonusPotentialLines.length > 0;
 
   return (
@@ -489,7 +495,7 @@ function EquipmentTooltip({
       style={{ left: position?.left ?? 12, top: position?.top ?? 12, visibility: position ? "visible" : "hidden" }}
     >
       {starCap > 0 && (
-        <div className="equipment-tooltip-stars" aria-label={`${item.starForce ?? 0} of ${starCap} Star Force`}>
+        <div className="equipment-tooltip-stars" aria-label={`${displayedStarForce} of ${starCap} Star Force`}>
           {groupedStars.map((row, rowIndex) => <div className="equipment-tooltip-star-row" key={rowIndex}>
             {row.map((group, groupIndex) => <span className="equipment-tooltip-star-group" key={groupIndex}>
               {group.map((filled, starIndex) => <i className={filled ? "is-filled" : ""} key={starIndex}>★</i>)}
@@ -525,7 +531,7 @@ function EquipmentTooltip({
       </div>
 
       {potentialLines.length > 0 && (
-        <TooltipPotentialSection title={`${item.potentialTier || "Potential"} potential`} lines={potentialLines} />
+        <TooltipPotentialSection title={`${blackHeart ? BLACK_HEART_POTENTIAL_TIER : item.potentialTier || "Potential"} potential`} lines={potentialLines} />
       )}
       {bonusPotentialLines.length > 0 && (
         <TooltipPotentialSection title={`${item.bonusPotentialTier || "Bonus"} potential`} lines={bonusPotentialLines} bonus />
@@ -627,6 +633,7 @@ function emptyDraft(definition: SlotDefinition, presetNumber: number): Equipment
 
 function fromItem(item: EquipmentItem): EquipmentDraft {
   const normalized = normalizeEquipmentItem(item);
+  const blackHeart = isBlackHeart(normalized.slot, normalized.name);
   return {
     presetNumber: normalized.presetNumber,
     catalogItemId: normalized.catalogItemId,
@@ -634,13 +641,13 @@ function fromItem(item: EquipmentItem): EquipmentDraft {
     slotIndex: normalized.slotIndex,
     name: normalized.name,
     levelRequirement: normalized.levelRequirement,
-    starForce: normalized.starForce,
+    starForce: blackHeart ? BLACK_HEART_STAR_FORCE : normalized.starForce,
     astraStage: normalized.astraStage,
     statLines: normalized.statLines,
     flameStats: normalized.flameStats,
     flameScoreLines: normalized.flameScoreLines,
-    potentialTier: normalized.potentialTier,
-    potentialLines: normalized.potentialLines,
+    potentialTier: blackHeart ? BLACK_HEART_POTENTIAL_TIER : normalized.potentialTier,
+    potentialLines: blackHeart ? BLACK_HEART_POTENTIAL_LINES : normalized.potentialLines,
     bonusPotentialTier: normalized.bonusPotentialTier,
     bonusPotentialLines: normalized.bonusPotentialLines,
     rawExtractedText: normalized.rawExtractedText,

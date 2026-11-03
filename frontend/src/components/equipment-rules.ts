@@ -2,6 +2,10 @@ import type { EquipmentSlot } from "./equipment-manager";
 
 export type AstraStage = 1 | 2 | 3;
 
+export const BLACK_HEART_STAR_FORCE = 15;
+export const BLACK_HEART_POTENTIAL_TIER = "Epic";
+export const BLACK_HEART_POTENTIAL_LINES = "Boss Damage +30%\nIgnore Enemy Defense +30%";
+
 const NO_FLAME_SLOTS = new Set<EquipmentSlot>([
   "SECONDARY", "EMBLEM", "BADGE", "RING", "ANDROID", "HEART", "TOTEM",
 ]);
@@ -17,6 +21,10 @@ const SPECIAL_RING_PATTERNS = [
 
 export function isAstraSecondary(slot: EquipmentSlot, name: string) {
   return slot === "SECONDARY" && /^astra\b/i.test(name.trim());
+}
+
+export function isBlackHeart(slot: EquipmentSlot, name: string) {
+  return slot === "HEART" && name.trim().toLowerCase() === "black heart";
 }
 
 export function astraStarForceCap(name: string, stage: AstraStage | null, jobName?: string) {
@@ -59,6 +67,7 @@ export function itemStarForceCap(
   jobName?: string,
 ) {
   if (isAstraSecondary(slot, name)) return astraStarForceCap(name, astraStage, jobName);
+  if (isBlackHeart(slot, name)) return BLACK_HEART_STAR_FORCE;
   if (slot === "WEAPON" && /^genesis\b/i.test(name.trim())) return 22;
   if (slot === "WEAPON" && /^destiny\b/i.test(name.trim())) return 25;
   if (slot === "BADGE" && POTENTIAL_BADGE_EXCEPTIONS.has(name.trim().toLowerCase())) return 22;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { astraStarForceCap, itemStarForceCap, supportsFlames, supportsItemPotential } from "./equipment-rules";
+import { astraStarForceCap, BLACK_HEART_STAR_FORCE, isBlackHeart, itemStarForceCap, supportsFlames, supportsItemPotential } from "./equipment-rules";
 
 describe("equipment semantic rules", () => {
   it("uses Astra liberation phase star caps", () => {
@@ -35,5 +35,10 @@ describe("equipment semantic rules", () => {
     expect(itemStarForceCap("BADGE", "Ghost Ship Exorcist", 150, "NONE", null)).toBe(22);
     expect(itemStarForceCap("WEAPON", "Genesis Dual Bowguns", 200, "WEAPON", null)).toBe(22);
     expect(itemStarForceCap("WEAPON", "Destiny Dual Bowguns", 250, "WEAPON", null)).toBe(25);
+    expect(itemStarForceCap("HEART", "Fairy Heart", 100, "ARMOR_ACCESSORY", null)).toBe(8);
+    expect(itemStarForceCap("HEART", "Plasma Heart", 130, "ARMOR_ACCESSORY", null)).toBe(20);
+    expect(itemStarForceCap("HEART", "Total Control", 200, "ARMOR_ACCESSORY", null)).toBe(30);
+    expect(itemStarForceCap("HEART", "Black Heart", 120, "NONE", null)).toBe(BLACK_HEART_STAR_FORCE);
+    expect(isBlackHeart("HEART", "Black Heart")).toBe(true);
   });
 });
