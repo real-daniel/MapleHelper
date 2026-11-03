@@ -40,6 +40,7 @@ describe("equipment catalog API", () => {
     insert.run("HAT", "Universal Hat", null);
     for (const name of ["Fairy Heart", "Plasma Heart", "Black Heart", "Total Control"]) insert.run("HEART", name, null);
     database.exec(readFileSync(new URL("../../migrations/0011_mechanical_heart_star_force.sql", import.meta.url), "utf8"));
+    database.exec(readFileSync(new URL("../../migrations/0012_level_100_class_emblems.sql", import.meta.url), "utf8"));
     database.prepare("UPDATE equipment_catalog_items SET base_stats=?,star_force_profile='ARMOR_ACCESSORY',set_name='Eternal',maple_item_id=1005982 WHERE name='Eternal Bowman Hat'")
       .run('{"DEX":50,"Attack Power":6}');
     env = { DB: d1(database), APP_URL: "http://localhost:8787" };
@@ -98,6 +99,16 @@ describe("equipment catalog API", () => {
     expect(hearts.find((item) => item.name === "Black Heart")).toMatchObject({
       starForceProfile: "NONE",
       baseStats: { STR: 50, DEX: 50, INT: 50, LUK: 50, "Attack Power": 77, "Magic Attack": 77 },
+    });
+  });
+
+  it("stores exact level-100 emblem family names and special base stats", () => {
+    expect(database.prepare("SELECT COUNT(*) AS count FROM equipment_catalog_items WHERE slot='EMBLEM' AND level_requirement=100").get().count).toBe(26);
+    expect(database.prepare("SELECT base_stats FROM equipment_catalog_items WHERE slot='EMBLEM' AND name='Angel Emblem'").get()).toMatchObject({
+      base_stats: '{"STR":10,"DEX":10,"Max HP":400,"Attack Power":2,"Magic Attack":2}',
+    });
+    expect(database.prepare("SELECT base_stats FROM equipment_catalog_items WHERE slot='EMBLEM' AND name='Hybrid Heart'").get()).toMatchObject({
+      base_stats: '{"Max HP":300,"Max MP":100,"Attack Power":2,"Magic Attack":2,"Defense":100}',
     });
   });
 

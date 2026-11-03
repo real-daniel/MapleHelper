@@ -91,6 +91,18 @@ describe("subclass-specific secondary weapons", () => {
     expect(isEquipmentSubclassCompatible("SECONDARY", null, "Astra Future Secondary", "Hero")).toBe(false);
   });
 
+  it("shows each class its actual level-100 emblem family", () => {
+    expect(isEquipmentSubclassCompatible("EMBLEM", 1190301, "Gold Maple Leaf Emblem", "Hero")).toBe(true);
+    expect(isEquipmentSubclassCompatible("EMBLEM", 1190301, "Gold Maple Leaf Emblem", "Kaiser")).toBe(false);
+    expect(isEquipmentSubclassCompatible("EMBLEM", 1190513, "Gold Heroes Emblem", "Mercedes")).toBe(true);
+    expect(isEquipmentSubclassCompatible("EMBLEM", 1190201, "Hybrid Heart", "Xenon")).toBe(true);
+    expect(isEquipmentSubclassCompatible("EMBLEM", 1190101, "Angel Emblem", "Angelic Buster")).toBe(true);
+    expect(isEquipmentSubclassCompatible("EMBLEM", 1190565, "Gold Sword Emblem", "Ren")).toBe(true);
+    expect(isEquipmentSubclassCompatible("EMBLEM", 1191113, "Gold Guardian Emblem", "Sia Astelle")).toBe(true);
+    expect(isEquipmentSubclassCompatible("EMBLEM", 1191115, "Gold Knight Emblem", "Erel Light")).toBe(true);
+    expect(isEquipmentSubclassCompatible("EMBLEM", 1191115, "Gold Knight Emblem", "Adele")).toBe(false);
+  });
+
   it("does not affect universal secondary items or other slots", () => {
     expect(isEquipmentSubclassCompatible("SECONDARY", null, "Generic Secondary", "Hero")).toBe(true);
     expect(isEquipmentSubclassCompatible("HAT", 1000000, "Eternal Mage Hat", "Hero")).toBe(true);
