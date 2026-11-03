@@ -87,6 +87,31 @@ describe("subclass-specific secondary weapons", () => {
     expect(isEquipmentSubclassCompatible("SECONDARY", 1354003, "Noble Bladebinder", "Hero")).toBe(false);
   });
 
+  it.each([
+    ["Hero", "Virtues Medallion"], ["Paladin", "Sacred Rosary"], ["Dark Knight", "Berserk Chain"],
+    ["Arch Mage (F/P)", "Rusty Book <Epode>"], ["Arch Mage (I/L)", "Metallic Blue Book <Epode>"], ["Bishop", "White Gold Book <Epode>"],
+    ["Bow Master", "Blasted Feather"], ["Marksman", "True Shot"], ["Shadower", "Slashing Shadow"], ["Night Lord", "Death Sender Charm"],
+    ["Buccaneer", "Wrist Armor"], ["Corsair", "Falcon Eye"], ["Cannon Master", "Center Fire Bomb"],
+    ["Dawn Warrior", "Ereve Brilliance"], ["Mihile", "Soul Shield of Justice"], ["Aran", "Dragon Mass"], ["Evan", "Dragon Master's Legacy"],
+    ["Mercedes", "Infinite Magic Arrows"], ["Phantom", "Carte Finale"], ["Shade", "Golden Fox Marble"], ["Luminous", "Karma Orb"],
+    ["Demon Slayer", "Force Shield of Extremes"], ["Blaster", "Masterwork Charges"], ["Battle Mage", "Maximizer Ball"],
+    ["Wild Hunter", "Wild Heron"], ["Mechanic", "Eternal Magnum"], ["Xenon", "Octa Core Controller"], ["Kaiser", "Nova Truth Essence"],
+    ["Kain", "D100 Custom Weapon Belt"], ["Cadena", "Transmitter Type-A"], ["Angelic Buster", "Green Soul Ring"],
+    ["Kinesis", "Queen Chess Piece"], ["Illium", "Glory Lucent Wings"], ["Ark", "Ultimate Path"], ["Pathfinder", "Perfect Relic"],
+    ["Hoyoung", "Moonstone Fan Tassel"], ["Adele", "Noble Bladebinder"], ["Lara", "Radiant Four-Jade Ornament"],
+    ["Khali", "Infinite Hex Seeker"], ["Ren", "Violet Imugi Gem"], ["Hayato", "Fire Phoenix Blade"], ["Lynn", "Golden Pearl Leaf"],
+    ["Mo Xuan", "Boundless Brace Band"], ["Sia Astelle", "Oort Compass"], ["Kanna", "Shikigami Talisman"],
+    ["Erel Light", "Imper Keir"], ["Blade Master", "Meteor Katara"],
+  ])("shows %s the correct standard level-100 secondary %s", (job, name) => {
+    expect(isEquipmentSubclassCompatible("SECONDARY", null, name, job)).toBe(true);
+  });
+
+  it("does not leak standard level-100 secondaries across classes", () => {
+    expect(isEquipmentSubclassCompatible("SECONDARY", 1352202, "Virtues Medallion", "Paladin")).toBe(false);
+    expect(isEquipmentSubclassCompatible("SECONDARY", 1352972, "Ereve Brilliance", "Hero")).toBe(false);
+    expect(isEquipmentSubclassCompatible("SECONDARY", 1352883, "Imper Keir", "Adele")).toBe(false);
+  });
+
   it("filters Astra secondaries while preserving legitimate shared variants", () => {
     expect(isEquipmentSubclassCompatible("SECONDARY", 1092123, "Astra Sacred Aegis", "Hero")).toBe(true);
     expect(isEquipmentSubclassCompatible("SECONDARY", 1092123, "Astra Sacred Aegis", "Paladin")).toBe(true);
