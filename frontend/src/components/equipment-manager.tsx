@@ -6,7 +6,8 @@ import { apiFetch } from "@/lib/api";
 import { potentialLineOptions, supportsPotential } from "@/components/potential-lines";
 import {
   BLACK_HEART_BASE_STATS, BLACK_HEART_POTENTIAL_LINES, BLACK_HEART_POTENTIAL_TIER, BLACK_HEART_STAR_FORCE,
-  astraBaseStatsForStage, isAstraSecondary, isBlackHeart, itemStarForceCap, supportsFlames, supportsItemPotential, type AstraStage,
+  astraBaseStatsForStage, fixedWeaponStarForce, isAstraSecondary, isBlackHeart, isDestinyWeapon, itemStarForceCap,
+  supportsFlames, supportsItemPotential, type AstraStage, type DestinyStage,
 } from "@/components/equipment-rules";
 import { equipmentJobGroups, isEquipmentJobGroupCompatible, isEquipmentSubclassCompatible, resolveEquipmentName } from "@/components/equipment-names";
 import { equipmentTooltipStatRows, starForceRows, type TooltipStatComponent } from "@/components/equipment-tooltip-stats";
@@ -28,6 +29,7 @@ export type EquipmentItem = {
   levelRequirement: number | null;
   starForce: number | null;
   astraStage: AstraStage | null;
+  destinyStage: DestinyStage | null;
   statLines: string;
   flameStats: string;
   flameScoreLines: string;
@@ -200,7 +202,9 @@ export function EquipmentManager({
       const resolvedName = resolveEquipmentName(name, current.slot, characterJob);
       const levelRequirement = name ? item?.levelRequirement ?? current.levelRequirement : null;
       const astraStage = isAstraSecondary(current.slot, resolvedName) ? current.astraStage ?? 1 : null;
-      const cap = itemStarForceCap(current.slot, resolvedName, levelRequirement, item?.starForceProfile, astraStage, characterJob);
+      const destinyStage = isDestinyWeapon(current.slot, resolvedName) ? current.destinyStage ?? 1 : null;
+      const cap = itemStarForceCap(current.slot, resolvedName, levelRequirement, item?.starForceProfile, astraStage, characterJob, destinyStage);
+      const fixedStars = fixedWeaponStarForce(current.slot, resolvedName, destinyStage);
       const blackHeart = isBlackHeart(current.slot, resolvedName);
       return {
         ...current,
@@ -208,7 +212,8 @@ export function EquipmentManager({
         name: resolvedName,
         levelRequirement,
         astraStage,
-        starForce: blackHeart ? BLACK_HEART_STAR_FORCE : current.starForce != null && current.starForce > cap ? cap : current.starForce,
+        destinyStage,
+        starForce: blackHeart ? BLACK_HEART_STAR_FORCE : fixedStars ?? (current.starForce != null && current.starForce > cap ? cap : current.starForce),
         flameStats: supportsFlames(current.slot, resolvedName) ? current.flameStats : "",
         flameScoreLines: supportsFlames(current.slot, resolvedName) ? current.flameScoreLines : "",
         potentialTier: blackHeart ? BLACK_HEART_POTENTIAL_TIER : supportsItemPotential(current.slot, resolvedName) ? current.potentialTier : "",
@@ -226,13 +231,19 @@ export function EquipmentManager({
     });
   }
 
+  function updateDestinyStage(value: string) {
+    const stage = Number(value) as DestinyStage;
+    setDraft((current) => current ? { ...current, destinyStage: stage, starForce: fixedWeaponStarForce(current.slot, current.name, stage) } : current);
+  }
+
   function updateLevel(value: string) {
     const levelRequirement = nullableNumber(value);
     setDraft((current) => {
       if (!current) return current;
       const item = findCatalogItem(catalog, current.name, current.slot, characterJob);
-      const cap = itemStarForceCap(current.slot, current.name, levelRequirement, item?.starForceProfile, current.astraStage, characterJob);
-      return { ...current, levelRequirement, starForce: current.starForce != null && current.starForce > cap ? cap : current.starForce };
+      const cap = itemStarForceCap(current.slot, current.name, levelRequirement, item?.starForceProfile, current.astraStage, characterJob, current.destinyStage);
+      const fixedStars = fixedWeaponStarForce(current.slot, current.name, current.destinyStage);
+      return { ...current, levelRequirement, starForce: fixedStars ?? (current.starForce != null && current.starForce > cap ? cap : current.starForce) };
     });
   }
 
@@ -266,7 +277,7 @@ export function EquipmentManager({
     try {
       const payload = {
         ...draft,
-        starForce: isBlackHeart(draft.slot, draft.name) ? BLACK_HEART_STAR_FORCE : starForceCap > 0 ? draft.starForce : null,
+        starForce: isBlackHeart(draft.slot, draft.name) ? BLACK_HEART_STAR_FORCE : fixedWeaponStarForce(draft.slot, draft.name, draft.destinyStage) ?? (starForceCap > 0 ? draft.starForce : null),
         flameStats: supportsFlames(draft.slot, draft.name) ? draft.flameStats : "",
         flameScoreLines: supportsFlames(draft.slot, draft.name) ? draft.flameScoreLines : "",
         potentialTier: isBlackHeart(draft.slot, draft.name) ? BLACK_HEART_POTENTIAL_TIER : supportsItemPotential(draft.slot, draft.name) ? draft.potentialTier : "",
@@ -327,8 +338,9 @@ export function EquipmentManager({
     ?? findCatalogItem(catalog, draft.name, draft.slot, characterJob)
     : null;
   const starForceCap = draft
-    ? itemStarForceCap(draft.slot, draft.name, draft.levelRequirement, selectedCatalogItem?.starForceProfile, draft.astraStage, characterJob)
+    ? itemStarForceCap(draft.slot, draft.name, draft.levelRequirement, selectedCatalogItem?.starForceProfile, draft.astraStage, characterJob, draft.destinyStage)
     : 0;
+  const fixedStars = draft ? fixedWeaponStarForce(draft.slot, draft.name, draft.destinyStage) : null;
 
   return (
     <div className="equipment-manager">
@@ -407,12 +419,18 @@ export function EquipmentManager({
 
               <div className="field-grid">
                 <label>Original level<input type="number" min={0} max={300} value={draft.levelRequirement ?? ""} onChange={(event) => updateLevel(event.target.value)} /></label>
-                {starForceCap > 0 && <label>Star Force<input type="number" min={0} max={starForceCap} disabled={isBlackHeart(draft.slot, draft.name)} value={isBlackHeart(draft.slot, draft.name) ? BLACK_HEART_STAR_FORCE : draft.starForce ?? ""} onChange={(event) => update("starForce", nullableNumber(event.target.value))} /></label>}
+                {starForceCap > 0 && <label>Star Force<input type="number" min={0} max={starForceCap} disabled={isBlackHeart(draft.slot, draft.name) || fixedStars != null} value={isBlackHeart(draft.slot, draft.name) ? BLACK_HEART_STAR_FORCE : fixedStars ?? draft.starForce ?? ""} onChange={(event) => update("starForce", nullableNumber(event.target.value))} /></label>}
                 {isAstraSecondary(draft.slot, draft.name) && <label>Astra phase
                   <select value={draft.astraStage ?? 1} onChange={(event) => updateAstraStage(event.target.value)}>
                     <option value={1}>Phase I</option>
                     <option value={2}>Phase II</option>
                     <option value={3}>Phase III</option>
+                  </select>
+                </label>}
+                {isDestinyWeapon(draft.slot, draft.name) && <label>Destiny phase
+                  <select value={draft.destinyStage ?? 1} onChange={(event) => updateDestinyStage(event.target.value)}>
+                    <option value={1}>Phase I · 22★</option>
+                    <option value={2}>Phase II · 25★</option>
                   </select>
                 </label>}
               </div>
@@ -486,8 +504,8 @@ function EquipmentTooltip({
   const statRows = equipmentTooltipStatRows(blackHeart ? { ...item, catalogBaseStats: BLACK_HEART_BASE_STATS } : { ...item, catalogBaseStats: phaseBaseStats });
   const potentialLines = displayLines(blackHeart ? BLACK_HEART_POTENTIAL_LINES : item.potentialLines);
   const bonusPotentialLines = displayLines(item.bonusPotentialLines);
-  const starCap = itemStarForceCap(item.slot, item.name, item.levelRequirement, item.catalogStarForceProfile, item.astraStage, characterJob);
-  const displayedStarForce = blackHeart ? BLACK_HEART_STAR_FORCE : item.starForce ?? 0;
+  const starCap = itemStarForceCap(item.slot, item.name, item.levelRequirement, item.catalogStarForceProfile, item.astraStage, characterJob, item.destinyStage);
+  const displayedStarForce = blackHeart ? BLACK_HEART_STAR_FORCE : fixedWeaponStarForce(item.slot, item.name, item.destinyStage) ?? item.starForce ?? 0;
   const groupedStars = starForceRows(displayedStarForce, starCap);
   const hasDetails = statRows.length > 0 || potentialLines.length > 0 || bonusPotentialLines.length > 0;
 
@@ -519,6 +537,7 @@ function EquipmentTooltip({
           <span>REQ LEV: <strong>{item.levelRequirement ?? "—"}</strong></span>
           {starCap > 0 && <span>STAR FORCE: <strong>{item.starForce ?? 0} / {starCap}</strong></span>}
           {item.astraStage != null && <span>Astra phase: <strong>{romanNumeral(item.astraStage)}</strong></span>}
+          {item.destinyStage != null && <span>Destiny phase: <strong>{romanNumeral(item.destinyStage)}</strong></span>}
         </div>
       </div>
 
@@ -621,6 +640,7 @@ function emptyDraft(definition: SlotDefinition, presetNumber: number): Equipment
     levelRequirement: null,
     starForce: null,
     astraStage: null,
+    destinyStage: null,
     statLines: "",
     flameStats: "",
     flameScoreLines: "",
@@ -648,6 +668,7 @@ function fromItem(item: EquipmentItem): EquipmentDraft {
     levelRequirement: normalized.levelRequirement,
     starForce: blackHeart ? BLACK_HEART_STAR_FORCE : normalized.starForce,
     astraStage: normalized.astraStage,
+    destinyStage: normalized.destinyStage,
     statLines: normalized.statLines,
     flameStats: normalized.flameStats,
     flameScoreLines: normalized.flameScoreLines,
@@ -669,6 +690,7 @@ export function normalizeEquipmentItem(item: EquipmentItem): EquipmentItem {
     catalogItemId: item.catalogItemId ?? null,
     presetNumber: item.presetNumber ?? 1,
     astraStage: item.astraStage ?? null,
+    destinyStage: item.destinyStage ?? null,
     statLines: item.statLines ?? "",
     flameStats: item.flameStats ?? "",
     flameScoreLines: item.flameScoreLines ?? "",

@@ -1,6 +1,7 @@
 import type { EquipmentSlot } from "./equipment-manager";
 
 export type AstraStage = 1 | 2 | 3;
+export type DestinyStage = 1 | 2;
 
 export const BLACK_HEART_STAR_FORCE = 15;
 export const BLACK_HEART_POTENTIAL_TIER = "Epic";
@@ -28,6 +29,20 @@ export function isAstraSecondary(slot: EquipmentSlot, name: string) {
 
 export function isBlackHeart(slot: EquipmentSlot, name: string) {
   return slot === "HEART" && name.trim().toLowerCase() === "black heart";
+}
+
+export function isGenesisWeapon(slot: EquipmentSlot, name: string) {
+  return slot === "WEAPON" && /^genesis\b/i.test(name.trim());
+}
+
+export function isDestinyWeapon(slot: EquipmentSlot, name: string) {
+  return slot === "WEAPON" && /^destiny\b/i.test(name.trim());
+}
+
+export function fixedWeaponStarForce(slot: EquipmentSlot, name: string, destinyStage: DestinyStage | null) {
+  if (isGenesisWeapon(slot, name)) return 22;
+  if (isDestinyWeapon(slot, name)) return destinyStage === 2 ? 25 : 22;
+  return null;
 }
 
 export function astraStarForceCap(name: string, stage: AstraStage | null, jobName?: string) {
@@ -88,12 +103,13 @@ export function itemStarForceCap(
   starForceProfile: string | null | undefined,
   astraStage: AstraStage | null,
   jobName?: string,
+  destinyStage?: DestinyStage | null,
 ) {
   if (isAstraSecondary(slot, name)) return astraStarForceCap(name, astraStage, jobName);
   if (isBlackHeart(slot, name)) return BLACK_HEART_STAR_FORCE;
   if (slot === "HEART") return standardStarForceCap(level);
-  if (slot === "WEAPON" && /^genesis\b/i.test(name.trim())) return 22;
-  if (slot === "WEAPON" && /^destiny\b/i.test(name.trim())) return 25;
+  const fixedWeaponStars = fixedWeaponStarForce(slot, name, destinyStage ?? null);
+  if (fixedWeaponStars != null) return fixedWeaponStars;
   if (slot === "BADGE" && POTENTIAL_BADGE_EXCEPTIONS.has(name.trim().toLowerCase())) return 22;
   if (starForceProfile === "NONE") return 0;
   if (["EMBLEM", "POCKET", "BADGE", "MEDAL", "ANDROID", "TOTEM"].includes(slot)) return 0;

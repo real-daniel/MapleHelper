@@ -44,6 +44,7 @@ describe("equipment catalog API", () => {
     database.exec(readFileSync(new URL("../../migrations/0013_level_100_adele_secondary.sql", import.meta.url), "utf8"));
     database.exec(readFileSync(new URL("../../migrations/0014_level_100_class_secondaries.sql", import.meta.url), "utf8"));
     database.exec(readFileSync(new URL("../../migrations/0015_full_astra_secondaries.sql", import.meta.url), "utf8"));
+    database.exec(readFileSync(new URL("../../migrations/0016_destiny_weapon_phase.sql", import.meta.url), "utf8"));
     database.prepare("UPDATE equipment_catalog_items SET base_stats=?,star_force_profile='ARMOR_ACCESSORY',set_name='Eternal',maple_item_id=1005982 WHERE name='Eternal Bowman Hat'")
       .run('{"DEX":50,"Attack Power":6}');
     env = { DB: d1(database), APP_URL: "http://localhost:8787" };
@@ -183,9 +184,10 @@ describe("equipment catalog API", () => {
   });
 
   it.each([
-    ["Genesis Dual Bowguns", 23, 22],
-    ["Destiny Dual Bowguns", 26, 25],
-  ])("enforces the named weapon Star Force cap for %s", async (name, starForce, cap) => {
+    ["Genesis Dual Bowguns", null, 22],
+    ["Destiny Dual Bowguns", 1, 22],
+    ["Destiny Dual Bowguns", 2, 25],
+  ])("canonicalizes %s phase %s to its fixed Star Force", async (name, destinyStage, starForce) => {
     const response = await app.request("/api/v1/equipment", {
       method: "POST",
       headers: {
@@ -193,9 +195,9 @@ describe("equipment catalog API", () => {
         "X-XSRF-TOKEN": "test",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ slot: "WEAPON", name, levelRequirement: 250, starForce }),
+      body: JSON.stringify({ slot: "WEAPON", name, levelRequirement: name.startsWith("Genesis") ? 200 : 250, starForce: 0, destinyStage }),
     }, env);
-    expect(response.status).toBe(400);
-    expect(await response.json()).toMatchObject({ message: `starForce cannot exceed ${cap} for this equipment.` });
+    expect(response.status).toBe(201);
+    expect(await response.json()).toMatchObject({ starForce, destinyStage });
   });
 });
