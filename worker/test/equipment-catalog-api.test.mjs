@@ -45,6 +45,7 @@ describe("equipment catalog API", () => {
     database.exec(readFileSync(new URL("../../migrations/0014_level_100_class_secondaries.sql", import.meta.url), "utf8"));
     database.exec(readFileSync(new URL("../../migrations/0015_full_astra_secondaries.sql", import.meta.url), "utf8"));
     database.exec(readFileSync(new URL("../../migrations/0016_destiny_weapon_phase.sql", import.meta.url), "utf8"));
+    database.exec(readFileSync(new URL("../../migrations/0017_oz_skill_rings.sql", import.meta.url), "utf8"));
     database.prepare("UPDATE equipment_catalog_items SET base_stats=?,star_force_profile='ARMOR_ACCESSORY',set_name='Eternal',maple_item_id=1005982 WHERE name='Eternal Bowman Hat'")
       .run('{"DEX":50,"Attack Power":6}');
     env = { DB: d1(database), APP_URL: "http://localhost:8787" };
@@ -144,6 +145,15 @@ describe("equipment catalog API", () => {
     expect(database.prepare("SELECT maple_item_id,base_stats FROM equipment_catalog_items WHERE name='Astra Katara'").get()).toMatchObject({
       maple_item_id: 1342121,
       base_stats: '{"STR":10,"DEX":10,"LUK":80,"Attack Power":225}',
+    });
+  });
+
+  it("stores selectable Oz skill rings without enhancement profiles", () => {
+    expect(database.prepare("SELECT COUNT(*) AS count FROM equipment_catalog_items WHERE slot='RING' AND variant_group='OZ_SKILL_RING'").get().count).toBe(20);
+    expect(database.prepare("SELECT level_requirement,base_stats,star_force_profile FROM equipment_catalog_items WHERE name='Ring of Restraint'").get()).toMatchObject({
+      level_requirement: 110,
+      base_stats: '{"STR":4,"DEX":4,"INT":4,"LUK":4,"Attack Power":4,"Magic Attack":4}',
+      star_force_profile: "NONE",
     });
   });
 

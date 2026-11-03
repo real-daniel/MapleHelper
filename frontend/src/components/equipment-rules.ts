@@ -21,6 +21,8 @@ const POTENTIAL_BADGE_EXCEPTIONS = new Set([
 const SPECIAL_RING_PATTERNS = [
   /ring of restraint/i, /weapon jump .* ring/i, /risk taker ring/i, /continuous ring/i,
   /level jump .* ring/i, /critical damage ring/i, /totalling ring/i, /overdrive ring/i,
+  /ultimatum ring/i, /crisis hm ring/i, /cleansing ring/i, /health cut ring/i,
+  /critical defense ring/i, /limit ring/i,
 ];
 
 export function isAstraSecondary(slot: EquipmentSlot, name: string) {

@@ -33,6 +33,11 @@ describe("equipment semantic rules", () => {
     expect(supportsItemPotential("HEART", "Fairy Heart")).toBe(true);
     expect(supportsItemPotential("POCKET", "Pink Holy Cup")).toBe(false);
     expect(supportsItemPotential("RING", "Ring of Restraint")).toBe(false);
+    expect(supportsItemPotential("RING", "Continuous Ring")).toBe(false);
+    expect(supportsItemPotential("RING", "Weapon Jump S Ring")).toBe(false);
+    expect(supportsItemPotential("RING", "Ultimatum Ring")).toBe(false);
+    expect(supportsItemPotential("RING", "Crisis HM Ring")).toBe(false);
+    expect(supportsItemPotential("RING", "Limit Ring")).toBe(false);
   });
 
   it("does not offer Star Force for catalog items marked ineligible", () => {
