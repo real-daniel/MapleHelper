@@ -165,6 +165,7 @@ const WEAPON_JOBS_BY_ITEM_PREFIX: Record<number, string[]> = {
 };
 
 const SECONDARY_JOBS_BY_NAME: Record<string, string[]> = {
+  "noble bladebinder": ["Adele"],
   "princess no's soul shield": ["Mihile"],
   "princess no's accursed shield": ["Demon Slayer", "Demon Avenger"],
   "princess no's poisoned sword": ["Blade Master", "Dual Blade"],

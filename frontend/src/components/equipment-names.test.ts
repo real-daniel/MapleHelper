@@ -82,6 +82,11 @@ describe("subclass-specific secondary weapons", () => {
     expect(isEquipmentSubclassCompatible("SECONDARY", 1099011, "Princess No's Accursed Shield", "Demon Avenger")).toBe(true);
   });
 
+  it("shows Adele her exact level-100 secondary", () => {
+    expect(isEquipmentSubclassCompatible("SECONDARY", 1354003, "Noble Bladebinder", "Adele")).toBe(true);
+    expect(isEquipmentSubclassCompatible("SECONDARY", 1354003, "Noble Bladebinder", "Hero")).toBe(false);
+  });
+
   it("filters Astra secondaries while preserving legitimate shared variants", () => {
     expect(isEquipmentSubclassCompatible("SECONDARY", 1092123, "Astra Sacred Aegis", "Hero")).toBe(true);
     expect(isEquipmentSubclassCompatible("SECONDARY", 1092123, "Astra Sacred Aegis", "Paladin")).toBe(true);
