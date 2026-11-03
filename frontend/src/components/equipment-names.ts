@@ -267,10 +267,47 @@ const SECONDARY_JOBS_BY_NAME: Record<string, string[]> = {
   "astra compass": ["Sia Astelle"],
 };
 
+const EMBLEM_JOBS_BY_NAME: Record<string, string[]> = {
+  "gold maple leaf emblem": [
+    "Hero", "Paladin", "Dark Knight", "Arch Mage (F/P)", "Arch Mage (I/L)", "Bishop",
+    "Bow Master", "Bowmaster", "Marksman", "Pathfinder", "Night Lord", "Shadower",
+    "Blade Master", "Dual Blade", "Buccaneer", "Corsair", "Captain", "Cannon Master", "Cannoneer",
+  ],
+  "gold cygnus emblem": ["Dawn Warrior", "Blaze Wizard", "Wind Archer", "Night Walker", "Thunder Breaker", "Mihile"],
+  "gold heroes emblem": ["Aran", "Evan", "Mercedes", "Phantom", "Luminous", "Shade"],
+  "gold resistance emblem": ["Battle Mage", "Wild Hunter", "Mechanic", "Blaster"],
+  "gold demon emblem": ["Demon Slayer", "Demon Avenger"],
+  "hybrid heart": ["Xenon"],
+  "dragon emblem": ["Kaiser"],
+  "angel emblem": ["Angelic Buster"],
+  "gold agent emblem": ["Cadena"],
+  "gold hitman emblem": ["Kain"],
+  "gold knight's emblem": ["Adele"],
+  "gold crystal emblem": ["Illium"],
+  "gold chaser emblem": ["Khali"],
+  "gold abyssal emblem": ["Ark"],
+  "eternal time emblem": ["Zero"],
+  "gold kinesis emblem": ["Kinesis"],
+  "gold crescent emblem": ["Hayato"],
+  "gold blossom emblem": ["Kanna"],
+  "gold earthseer emblem": ["Lara"],
+  "gold three paths emblem": ["Hoyoung"],
+  "gold forest emblem": ["Lynn", "Beast Tamer"],
+  "gold xuanshan school emblem": ["Mo Xuan"],
+  "gold guardian emblem": ["Sia Astelle"],
+  "gold sword emblem": ["Ren"],
+  "gold knight emblem": ["Erel Light", "Erel"],
+  "gold astro emblem": ["Jett"],
+};
+
 export function isEquipmentSubclassCompatible(slot: EquipmentSlot, mapleItemId: number | null, itemName: string, jobName: string) {
   if (slot === "WEAPON") {
     if (mapleItemId == null) return true;
     const compatibleJobs = WEAPON_JOBS_BY_ITEM_PREFIX[Math.floor(mapleItemId / 1000)];
+    return compatibleJobs ? compatibleJobs.some((job) => sameJob(job, jobName)) : true;
+  }
+  if (slot === "EMBLEM") {
+    const compatibleJobs = EMBLEM_JOBS_BY_NAME[itemName.trim().toLowerCase()];
     return compatibleJobs ? compatibleJobs.some((job) => sameJob(job, jobName)) : true;
   }
   if (slot !== "SECONDARY") return true;
