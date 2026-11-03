@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { astraStarForceCap, BLACK_HEART_STAR_FORCE, isBlackHeart, itemStarForceCap, supportsFlames, supportsItemPotential } from "./equipment-rules";
+import { astraBaseStatsForStage, astraStarForceCap, BLACK_HEART_STAR_FORCE, isBlackHeart, itemStarForceCap, supportsFlames, supportsItemPotential } from "./equipment-rules";
 
 describe("equipment semantic rules", () => {
   it("uses Astra liberation phase star caps", () => {
@@ -10,6 +10,13 @@ describe("equipment semantic rules", () => {
     expect(astraStarForceCap("Astra Talisman", 1)).toBe(30);
     expect(astraStarForceCap("Astra", 1, "Dual Blade")).toBe(30);
     expect(astraStarForceCap("Astra", 1, "Kanna")).toBe(30);
+  });
+
+  it("uses phase-specific Astra base stats", () => {
+    expect(astraBaseStatsForStage("Astra Bladebinder", { STR: 10, DEX: 10, "Attack Power": 7 }, 3)).toEqual({ STR: 20, DEX: 20, "Attack Power": 7 });
+    expect(astraBaseStatsForStage("Astra Katara", { STR: 10, DEX: 10, LUK: 80, "Attack Power": 225 }, 3)).toEqual({ STR: 30, DEX: 30, LUK: 100, "Attack Power": 225 });
+    expect(astraBaseStatsForStage("Astra Talisman", { INT: 75, LUK: 75, "Magic Attack": 260 }, 2)).toEqual({ INT: 85, LUK: 85, "Magic Attack": 260 });
+    expect(astraBaseStatsForStage("Astra Deca Core Controller", { STR: 5, DEX: 5, INT: 5, LUK: 5, "Max HP": 1000 }, 2)).toEqual({ STR: 7, DEX: 7, INT: 7, LUK: 7, "Max HP": 1000 });
   });
 
   it("enforces flame exclusions and documented exceptions", () => {

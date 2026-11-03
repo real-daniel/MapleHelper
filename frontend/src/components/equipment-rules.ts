@@ -35,6 +35,26 @@ export function astraStarForceCap(name: string, stage: AstraStage | null, jobNam
   return stage === 3 ? 30 : stage === 2 ? 20 : 15;
 }
 
+export function astraBaseStatsForStage(
+  name: string,
+  baseStats: Record<string, number> | null,
+  stage: AstraStage | null,
+) {
+  if (!baseStats || !stage || stage === 1) return baseStats;
+  const result = { ...baseStats };
+  const normalized = name.trim().toLowerCase();
+  for (const stat of ["STR", "DEX", "INT", "LUK"]) {
+    if (result[stat] == null) continue;
+    if (normalized === "astra deca core controller") {
+      result[stat] = stage === 2 ? 7 : 10;
+    } else {
+      const perPhase = /astra (katara|talisman)/i.test(name) ? 10 : 5;
+      result[stat] += perPhase * (stage - 1);
+    }
+  }
+  return result;
+}
+
 export function supportsFlames(slot: EquipmentSlot, name: string) {
   const normalized = name.trim().toLowerCase();
   if (slot === "MEDAL") return normalized === "immortal legacy";

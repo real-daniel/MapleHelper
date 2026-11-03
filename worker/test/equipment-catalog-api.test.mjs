@@ -43,6 +43,7 @@ describe("equipment catalog API", () => {
     database.exec(readFileSync(new URL("../../migrations/0012_level_100_class_emblems.sql", import.meta.url), "utf8"));
     database.exec(readFileSync(new URL("../../migrations/0013_level_100_adele_secondary.sql", import.meta.url), "utf8"));
     database.exec(readFileSync(new URL("../../migrations/0014_level_100_class_secondaries.sql", import.meta.url), "utf8"));
+    database.exec(readFileSync(new URL("../../migrations/0015_full_astra_secondaries.sql", import.meta.url), "utf8"));
     database.prepare("UPDATE equipment_catalog_items SET base_stats=?,star_force_profile='ARMOR_ACCESSORY',set_name='Eternal',maple_item_id=1005982 WHERE name='Eternal Bowman Hat'")
       .run('{"DEX":50,"Attack Power":6}');
     env = { DB: d1(database), APP_URL: "http://localhost:8787" };
@@ -131,6 +132,33 @@ describe("equipment catalog API", () => {
     expect(database.prepare("SELECT base_stats FROM equipment_catalog_items WHERE name='Oort Compass'").get()).toMatchObject({
       base_stats: '{"INT":10,"LUK":10,"Magic Attack":3}',
     });
+  });
+
+  it("stores every class-specific Astra secondary with phase-one stats", () => {
+    expect(database.prepare("SELECT COUNT(*) AS count FROM equipment_catalog_items WHERE slot='SECONDARY' AND variant_group='ASTRA'").get().count).toBe(52);
+    expect(database.prepare("SELECT maple_item_id,base_stats FROM equipment_catalog_items WHERE name='Astra Compass'").get()).toMatchObject({
+      maple_item_id: 1725300,
+      base_stats: '{"INT":10,"LUK":10,"Magic Attack":7}',
+    });
+    expect(database.prepare("SELECT maple_item_id,base_stats FROM equipment_catalog_items WHERE name='Astra Katara'").get()).toMatchObject({
+      maple_item_id: 1342121,
+      base_stats: '{"STR":10,"DEX":10,"LUK":80,"Attack Power":225}',
+    });
+  });
+
+  it("persists the selected Astra phase and applies its Star Force cap", async () => {
+    const catalogItemId = database.prepare("SELECT id FROM equipment_catalog_items WHERE name='Astra Bladebinder'").get().id;
+    const response = await app.request("/api/v1/equipment", {
+      method: "POST",
+      headers: {
+        Cookie: "MAPLEHELPER_SESSION=session-1; MAPLEHELPER_CSRF=test",
+        "X-XSRF-TOKEN": "test",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ slot: "SECONDARY", name: "Astra Bladebinder", catalogItemId, levelRequirement: 200, astraStage: 2, starForce: 20 }),
+    }, env);
+    expect(response.status).toBe(201);
+    expect(await response.json()).toMatchObject({ name: "Astra Bladebinder", astraStage: 2, starForce: 20 });
   });
 
   it("canonicalizes Black Heart's fixed stars and potential when saving", async () => {

@@ -6,7 +6,7 @@ import { apiFetch } from "@/lib/api";
 import { potentialLineOptions, supportsPotential } from "@/components/potential-lines";
 import {
   BLACK_HEART_BASE_STATS, BLACK_HEART_POTENTIAL_LINES, BLACK_HEART_POTENTIAL_TIER, BLACK_HEART_STAR_FORCE,
-  isAstraSecondary, isBlackHeart, itemStarForceCap, supportsFlames, supportsItemPotential, type AstraStage,
+  astraBaseStatsForStage, isAstraSecondary, isBlackHeart, itemStarForceCap, supportsFlames, supportsItemPotential, type AstraStage,
 } from "@/components/equipment-rules";
 import { equipmentJobGroups, isEquipmentJobGroupCompatible, isEquipmentSubclassCompatible, resolveEquipmentName } from "@/components/equipment-names";
 import { equipmentTooltipStatRows, starForceRows, type TooltipStatComponent } from "@/components/equipment-tooltip-stats";
@@ -408,16 +408,18 @@ export function EquipmentManager({
               <div className="field-grid">
                 <label>Original level<input type="number" min={0} max={300} value={draft.levelRequirement ?? ""} onChange={(event) => updateLevel(event.target.value)} /></label>
                 {starForceCap > 0 && <label>Star Force<input type="number" min={0} max={starForceCap} disabled={isBlackHeart(draft.slot, draft.name)} value={isBlackHeart(draft.slot, draft.name) ? BLACK_HEART_STAR_FORCE : draft.starForce ?? ""} onChange={(event) => update("starForce", nullableNumber(event.target.value))} /></label>}
+                {isAstraSecondary(draft.slot, draft.name) && <label>Astra phase
+                  <select value={draft.astraStage ?? 1} onChange={(event) => updateAstraStage(event.target.value)}>
+                    <option value={1}>Phase I</option>
+                    <option value={2}>Phase II</option>
+                    <option value={3}>Phase III</option>
+                  </select>
+                </label>}
               </div>
 
-              {isAstraSecondary(draft.slot, draft.name) && <label>Astra phase
-                <select value={draft.astraStage ?? 1} onChange={(event) => updateAstraStage(event.target.value)}>
-                  <option value={1}>I · 15★</option>
-                  <option value={2}>II · 20★</option>
-                  <option value={3}>III · 30★</option>
-                </select>
+              {isAstraSecondary(draft.slot, draft.name) && <div className="field-help">
                 <small><a href="https://maplestorywiki.net/w/Astra_Secondary_Weapon" target="_blank" rel="noreferrer">Astra Katara and Astra Talisman</a> can reach 30★ at every phase.</small>
-              </label>}
+              </div>}
 
               {supportsFlames(draft.slot, draft.name) && <details open>
                 <summary>Flame</summary>
@@ -478,7 +480,10 @@ function EquipmentTooltip({
   position: { left: number; top: number } | null;
 }) {
   const blackHeart = isBlackHeart(item.slot, item.name);
-  const statRows = equipmentTooltipStatRows(blackHeart ? { ...item, catalogBaseStats: BLACK_HEART_BASE_STATS } : item);
+  const phaseBaseStats = isAstraSecondary(item.slot, item.name)
+    ? astraBaseStatsForStage(item.name, item.catalogBaseStats, item.astraStage)
+    : item.catalogBaseStats;
+  const statRows = equipmentTooltipStatRows(blackHeart ? { ...item, catalogBaseStats: BLACK_HEART_BASE_STATS } : { ...item, catalogBaseStats: phaseBaseStats });
   const potentialLines = displayLines(blackHeart ? BLACK_HEART_POTENTIAL_LINES : item.potentialLines);
   const bonusPotentialLines = displayLines(item.bonusPotentialLines);
   const starCap = itemStarForceCap(item.slot, item.name, item.levelRequirement, item.catalogStarForceProfile, item.astraStage, characterJob);

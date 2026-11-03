@@ -6,7 +6,7 @@ const OUTPUT = resolve(process.argv[2] ?? "migrations/0010_maplestory_io_catalog
 const wrangler = resolve("node_modules/wrangler/bin/wrangler.js");
 const dbOutput = execFileSync(process.execPath, [
   wrangler, "d1", "execute", "maplehelper", "--local", "--json",
-  "--command", "SELECT id,slot,name,level_requirement,set_name,family_key,variant_group,job_group,name_pattern,base_stats,star_force_profile FROM equipment_catalog_items ORDER BY id",
+  "--command", "SELECT id,slot,name,level_requirement,set_name,family_key,variant_group,job_group,name_pattern,base_stats,star_force_profile,maple_item_id FROM equipment_catalog_items ORDER BY id",
 ], { encoding: "utf8", maxBuffer: 10 * 1024 * 1024 });
 const catalog = JSON.parse(dbOutput)[0].results;
 
@@ -46,6 +46,13 @@ const exactAliases = new Map([
   ["7 Day Badge", { id: 1182200, name: "Seven Days Badge", allowExistingStats: true }],
 ]);
 for (const row of exactRows) {
+  if (row.maple_item_id) {
+    try {
+      const value = await detail(row.maple_item_id);
+      resolvedExact.push({ row, item: { id: row.maple_item_id, name: value.description?.name ?? row.name }, detail: value });
+      continue;
+    } catch { /* Fall back to name-based resolution. */ }
+  }
   const alias = exactAliases.get(row.name);
   if (alias) {
     try {
