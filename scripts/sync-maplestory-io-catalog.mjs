@@ -151,6 +151,8 @@ for (const entry of uniqueExpansions) {
     sql(entry.slot), sql(entry.item.name), numberOrNull(entry.detail.metaInfo?.reqLevel ?? entry.item.requiredLevel), "NULL", sql(entry.setName), sql(entry.familyKey), sql(entry.variantGroup ?? "EXACT"), sql(jobGroup), "0", sql(JSON.stringify(stats(entry.detail.metaInfo))), sql(entry.slot === "WEAPON" ? "WEAPON" : entry.slot === "SECONDARY" ? "NONE" : "ARMOR_ACCESSORY"), sql(`Base stats synced from MapleStory.io GMS v${version}.`), entry.item.id,
   ].join(",")}) ON CONFLICT(slot,name) DO UPDATE SET level_requirement=excluded.level_requirement,set_name=excluded.set_name,family_key=excluded.family_key,variant_group=excluded.variant_group,job_group=excluded.job_group,name_pattern=0,base_stats=excluded.base_stats,star_force_profile=excluded.star_force_profile,notes=excluded.notes,maple_item_id=excluded.maple_item_id;`);
 }
+statements.push("UPDATE equipment_catalog_items SET star_force_profile='ARMOR_ACCESSORY' WHERE slot='HEART' AND lower(name)<>'black heart';");
+statements.push("UPDATE equipment_catalog_items SET star_force_profile='NONE', base_stats='{\"STR\":50,\"DEX\":50,\"INT\":50,\"LUK\":50,\"Max HP\":100,\"Attack Power\":77,\"Magic Attack\":77}', notes='Fixed Black Heart stats: visually locked at 15 stars, with Epic Boss Damage +30% and Ignore Enemy Defense +30%; cannot be enhanced or reset.' WHERE slot='HEART' AND lower(name)='black heart';");
 statements.push("DELETE FROM equipment_catalog_items WHERE name_pattern=1;");
 statements.push(`-- Generated from MapleStory.io GMS v${version}: ${resolvedExact.length} existing records refreshed, ${uniqueExpansions.length} exact variants imported.`);
 writeFileSync(OUTPUT, `${statements.join("\n\n")}\n`);

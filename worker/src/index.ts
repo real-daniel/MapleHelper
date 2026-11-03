@@ -351,6 +351,12 @@ app.post("/api/v1/equipment", async (c) => {
     bonus: stringValue(body.bonusPotentialLines, "bonusPotentialLines", 4000),
     raw: stringValue(body.rawExtractedText, "rawExtractedText", 8000),
   };
+  const blackHeart = slot === "HEART" && values.name.trim().toLowerCase() === "black heart";
+  if (blackHeart) {
+    values.stars = 15;
+    values.potentialTier = "Epic";
+    values.potential = "Boss Damage +30%\nIgnore Enemy Defense +30%";
+  }
   const astra = slot === "SECONDARY" && /^astra\b/i.test(values.name);
   const astraAlwaysThirty = /astra (katara|talisman)/i.test(values.name) || /dual blade|kanna/i.test(String(profile?.job ?? ""));
   const astraCap = astraAlwaysThirty ? 30 : values.astraStage === 3 ? 30 : values.astraStage === 2 ? 20 : 15;
