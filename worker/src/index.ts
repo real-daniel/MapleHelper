@@ -342,6 +342,7 @@ app.post("/api/v1/equipment", async (c) => {
     level: integerValue(body.levelRequirement, "levelRequirement", 0, 300),
     stars: integerValue(body.starForce, "starForce", 0, 30),
     astraStage: integerValue(body.astraStage, "astraStage", 1, 3),
+    destinyStage: integerValue(body.destinyStage, "destinyStage", 1, 2),
     stat: stringValue(body.statLines, "statLines", 4000),
     flame: stringValue(body.flameStats, "flameStats", 4000),
     flameScore: stringValue(body.flameScoreLines, "flameScoreLines", 4000),
@@ -357,26 +358,30 @@ app.post("/api/v1/equipment", async (c) => {
     values.potentialTier = "Epic";
     values.potential = "Boss Damage +30%\nIgnore Enemy Defense +30%";
   }
+  const genesis = slot === "WEAPON" && /^genesis\b/i.test(values.name);
+  const destiny = slot === "WEAPON" && /^destiny\b/i.test(values.name);
+  if (genesis) values.stars = 22;
+  if (destiny) values.stars = values.destinyStage === 2 ? 25 : 22;
   const astra = slot === "SECONDARY" && /^astra\b/i.test(values.name);
   const astraAlwaysThirty = /astra (katara|talisman)/i.test(values.name) || /dual blade|kanna/i.test(String(profile?.job ?? ""));
   const astraCap = astraAlwaysThirty ? 30 : values.astraStage === 3 ? 30 : values.astraStage === 2 ? 20 : 15;
   const badgeCap = slot === "BADGE" && ["ghost ship exorcist", "sengoku hakase badge", "shackles of resentment"].includes(values.name.toLowerCase())
     ? 22
     : standardStarForceLimit(values.level);
-  const namedWeaponCap = slot === "WEAPON" && /^genesis\b/i.test(values.name)
+  const namedWeaponCap = genesis
     ? 22
-    : slot === "WEAPON" && /^destiny\b/i.test(values.name)
-      ? 25
+    : destiny
+      ? values.destinyStage === 2 ? 25 : 22
       : badgeCap;
   const starForceCap = astra ? astraCap : namedWeaponCap;
   if (values.stars != null && values.stars > starForceCap) {
     throw new HttpError(400, `starForce cannot exceed ${starForceCap} for this equipment.`);
   }
   const result = await c.env.DB.prepare(`INSERT INTO equipment_items
-    (app_user_id,character_profile_id,catalog_item_id,preset_number,slot,slot_index,name,level_requirement,star_force,astra_stage,stat_lines,flame_stats,
+    (app_user_id,character_profile_id,catalog_item_id,preset_number,slot,slot_index,name,level_requirement,star_force,astra_stage,destiny_stage,stat_lines,flame_stats,
      flame_score_lines,potential_tier,potential_lines,bonus_potential_tier,bonus_potential_lines,raw_extracted_text,created_at,updated_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-    .bind(userId, profileId, catalogItemId, presetNumber, slot, slotIndex, values.name, values.level, values.stars, astra ? values.astraStage ?? 1 : null, values.stat, values.flame,
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .bind(userId, profileId, catalogItemId, presetNumber, slot, slotIndex, values.name, values.level, values.stars, astra ? values.astraStage ?? 1 : null, destiny ? values.destinyStage ?? 1 : null, values.stat, values.flame,
       values.flameScore, values.potentialTier, values.potential, values.bonusTier, values.bonus, values.raw, now, now).run();
   const row = await c.env.DB.prepare(`${equipmentSelect()} WHERE e.id=? AND e.app_user_id=?`)
     .bind(result.meta.last_row_id, userId).first<Record<string, unknown>>();
