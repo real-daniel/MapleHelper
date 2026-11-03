@@ -42,6 +42,7 @@ describe("equipment catalog API", () => {
     database.exec(readFileSync(new URL("../../migrations/0011_mechanical_heart_star_force.sql", import.meta.url), "utf8"));
     database.exec(readFileSync(new URL("../../migrations/0012_level_100_class_emblems.sql", import.meta.url), "utf8"));
     database.exec(readFileSync(new URL("../../migrations/0013_level_100_adele_secondary.sql", import.meta.url), "utf8"));
+    database.exec(readFileSync(new URL("../../migrations/0014_level_100_class_secondaries.sql", import.meta.url), "utf8"));
     database.prepare("UPDATE equipment_catalog_items SET base_stats=?,star_force_profile='ARMOR_ACCESSORY',set_name='Eternal',maple_item_id=1005982 WHERE name='Eternal Bowman Hat'")
       .run('{"DEX":50,"Attack Power":6}');
     env = { DB: d1(database), APP_URL: "http://localhost:8787" };
@@ -118,6 +119,17 @@ describe("equipment catalog API", () => {
       name: "Noble Bladebinder",
       level_requirement: 100,
       base_stats: '{"STR":10,"DEX":10,"Attack Power":3}',
+    });
+  });
+
+  it("stores every standard class-specific level-100 secondary", () => {
+    expect(database.prepare("SELECT COUNT(*) AS count FROM equipment_catalog_items WHERE slot='SECONDARY' AND variant_group='CLASS_STANDARD' AND level_requirement=100").get().count).toBe(47);
+    expect(database.prepare("SELECT base_stats,star_force_profile FROM equipment_catalog_items WHERE name='Meteor Katara'").get()).toMatchObject({
+      base_stats: '{"Max HP":370,"Attack Power":52}',
+      star_force_profile: "WEAPON",
+    });
+    expect(database.prepare("SELECT base_stats FROM equipment_catalog_items WHERE name='Oort Compass'").get()).toMatchObject({
+      base_stats: '{"INT":10,"LUK":10,"Magic Attack":3}',
     });
   });
 
