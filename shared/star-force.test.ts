@@ -42,4 +42,11 @@ describe("Star Force semantic rules", () => {
     expect(result).not.toHaveProperty("ATTACK_POWER");
     expect(result).not.toHaveProperty("MAX_HP");
   });
+
+  it("supports enhanceable hearts even before their catalog migration is applied", () => {
+    expect(starForceBonuses({ name: "Plasma Heart", slot: "HEART", levelRequirement: 130, starForceProfile: "NONE", baseStats: { STR: 10, DEX: 10, INT: 10, LUK: 10 } }, 20)).toMatchObject({
+      STR: 75, DEX: 75, INT: 75, LUK: 75, ATTACK_POWER: 45, MAGIC_ATTACK: 45,
+    });
+    expect(starForceBonuses({ name: "Black Heart", slot: "HEART", levelRequirement: 120, starForceProfile: "NONE", baseStats: { STR: 50 } }, 15)).toEqual({});
+  });
 });
