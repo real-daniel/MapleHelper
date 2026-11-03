@@ -109,6 +109,7 @@ export function starForceBonuses(item: StarForceItemFacts, stars: number): Parti
 function effectiveProfile(item: StarForceItemFacts) {
   if (item.starForceProfile !== "NONE") return item.starForceProfile;
   const name = item.name?.trim() ?? "";
+  if (item.slot === "HEART" && name.toLowerCase() !== "black heart") return "ARMOR_ACCESSORY";
   if (item.slot === "SECONDARY" && /^astra\b/i.test(name)) {
     return /astra (?:katara|talisman|spirit charm)/i.test(name) ? "WEAPON" : "ARMOR_ACCESSORY";
   }

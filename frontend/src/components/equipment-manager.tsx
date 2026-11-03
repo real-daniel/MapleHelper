@@ -5,7 +5,7 @@ import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { apiFetch } from "@/lib/api";
 import { potentialLineOptions, supportsPotential } from "@/components/potential-lines";
 import {
-  BLACK_HEART_POTENTIAL_LINES, BLACK_HEART_POTENTIAL_TIER, BLACK_HEART_STAR_FORCE,
+  BLACK_HEART_BASE_STATS, BLACK_HEART_POTENTIAL_LINES, BLACK_HEART_POTENTIAL_TIER, BLACK_HEART_STAR_FORCE,
   isAstraSecondary, isBlackHeart, itemStarForceCap, supportsFlames, supportsItemPotential, type AstraStage,
 } from "@/components/equipment-rules";
 import { equipmentJobGroups, isEquipmentJobGroupCompatible, isEquipmentSubclassCompatible, resolveEquipmentName } from "@/components/equipment-names";
@@ -477,8 +477,8 @@ function EquipmentTooltip({
   characterJob: string;
   position: { left: number; top: number } | null;
 }) {
-  const statRows = equipmentTooltipStatRows(item);
   const blackHeart = isBlackHeart(item.slot, item.name);
+  const statRows = equipmentTooltipStatRows(blackHeart ? { ...item, catalogBaseStats: BLACK_HEART_BASE_STATS } : item);
   const potentialLines = displayLines(blackHeart ? BLACK_HEART_POTENTIAL_LINES : item.potentialLines);
   const bonusPotentialLines = displayLines(item.bonusPotentialLines);
   const starCap = itemStarForceCap(item.slot, item.name, item.levelRequirement, item.catalogStarForceProfile, item.astraStage, characterJob);

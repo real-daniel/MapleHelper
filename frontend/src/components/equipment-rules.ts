@@ -5,6 +5,9 @@ export type AstraStage = 1 | 2 | 3;
 export const BLACK_HEART_STAR_FORCE = 15;
 export const BLACK_HEART_POTENTIAL_TIER = "Epic";
 export const BLACK_HEART_POTENTIAL_LINES = "Boss Damage +30%\nIgnore Enemy Defense +30%";
+export const BLACK_HEART_BASE_STATS = {
+  STR: 50, DEX: 50, INT: 50, LUK: 50, "Max HP": 100, "Attack Power": 77, "Magic Attack": 77,
+};
 
 const NO_FLAME_SLOTS = new Set<EquipmentSlot>([
   "SECONDARY", "EMBLEM", "BADGE", "RING", "ANDROID", "HEART", "TOTEM",
@@ -68,6 +71,7 @@ export function itemStarForceCap(
 ) {
   if (isAstraSecondary(slot, name)) return astraStarForceCap(name, astraStage, jobName);
   if (isBlackHeart(slot, name)) return BLACK_HEART_STAR_FORCE;
+  if (slot === "HEART") return standardStarForceCap(level);
   if (slot === "WEAPON" && /^genesis\b/i.test(name.trim())) return 22;
   if (slot === "WEAPON" && /^destiny\b/i.test(name.trim())) return 25;
   if (slot === "BADGE" && POTENTIAL_BADGE_EXCEPTIONS.has(name.trim().toLowerCase())) return 22;
