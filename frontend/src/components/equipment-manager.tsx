@@ -717,6 +717,7 @@ function samePosition(item: Pick<EquipmentItem, "slot" | "slotIndex" | "presetNu
 function equipmentIconUrl(item: EquipmentItem) {
   const params = new URLSearchParams({ name: item.name, slot: item.slot });
   if (item.levelRequirement != null) params.set("level", String(item.levelRequirement));
+  if (item.catalogMapleItemId != null) params.set("itemId", String(item.catalogMapleItemId));
   return `/api/v1/equipment-icons?${params.toString()}`;
 }
 

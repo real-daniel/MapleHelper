@@ -20,6 +20,8 @@ app.get("/api/v1/auth/csrf", issueCsrf);
 app.get("/api/v1/equipment-icons", async (c) => {
   const name = c.req.query("name")?.trim();
   if (!name || name.length > 120) throw new HttpError(400, "A valid equipment name is required.");
+  const itemIdValue = Number(c.req.query("itemId"));
+  const itemId = Number.isInteger(itemIdValue) && itemIdValue > 0 && itemIdValue <= 99_999_999 ? itemIdValue : null;
   const levelValue = Number(c.req.query("level"));
   const level = Number.isInteger(levelValue) && levelValue >= 0 && levelValue <= 300 ? levelValue : null;
   const slotValue = c.req.query("slot")?.toUpperCase();
@@ -29,7 +31,7 @@ app.get("/api/v1/equipment-icons", async (c) => {
   const cached = await cache.match(cacheKey);
   if (cached) return cached;
 
-  const icon = await fetchEquipmentIcon(name, level, slot);
+  const icon = await fetchEquipmentIcon(name, level, slot, itemId);
   if (!icon) return c.body(null, 404);
   const response = new Response(icon.body, {
     headers: {
@@ -470,9 +472,13 @@ type MapleStoryIoItem = {
 
 let gmsVersionPromise: Promise<string> | null = null;
 
-async function fetchEquipmentIcon(name: string, level: number | null, slot: EquipmentSlot | null) {
+async function fetchEquipmentIcon(name: string, level: number | null, slot: EquipmentSlot | null, itemId: number | null) {
   try {
     const version = await currentGmsVersion();
+    if (itemId != null) {
+      const exactIcon = await fetch(`https://maplestory.io/api/GMS/${version}/item/${itemId}/icon`);
+      if (exactIcon.ok) return exactIcon;
+    }
     const searchName = equipmentIconSearchName(name, slot);
     const search = new URL(`https://maplestory.io/api/GMS/${version}/item`);
     search.search = new URLSearchParams({ searchFor: searchName, count: "50" }).toString();
@@ -480,7 +486,7 @@ async function fetchEquipmentIcon(name: string, level: number | null, slot: Equi
     if (!searchResponse.ok) return null;
     const items = await searchResponse.json<MapleStoryIoItem[]>();
     const match = items
-      .filter((item) => item.typeInfo?.overallCategory === "Equip")
+      .filter((item) => item.typeInfo?.overallCategory === "Equip" || item.name.toLowerCase() === searchName.toLowerCase())
       .map((item) => ({ item, score: equipmentIconScore(item, searchName, level, slot) }))
       .sort((left, right) => right.score - left.score)[0];
     if (!match || match.score < 20) return null;
