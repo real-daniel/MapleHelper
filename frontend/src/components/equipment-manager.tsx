@@ -86,6 +86,8 @@ const SLOT_DEFINITIONS: SlotDefinition[] = [
   slot("emblem", "EMBLEM", null, "Emblem", 204, 280), slot("android", "ANDROID", null, "Android", 249, 280), slot("heart", "HEART", null, "Heart", 294, 280), slot("pocket", "POCKET", null, "Pocket", 24, 325), slot("badge", "BADGE", null, "Badge", 294, 325),
 ];
 
+const DEFAULT_ANDROID_ICON_URL = "/api/v1/equipment-icons?name=Android+%28M%29&slot=ANDROID&level=30&itemId=1662000";
+
 const EQUIPMENT_CROP = { x: 15, y: 92, width: 329, height: 316 };
 
 function slot(key: string, equipmentSlot: EquipmentSlot, slotIndex: number | null, label: string, x: number, y: number): SlotDefinition {
@@ -382,6 +384,13 @@ export function EquipmentManager({
                     className="equipment-slot-icon"
                     aria-hidden="true"
                     style={{ backgroundImage: `url("${equipmentIconUrl(displayItem)}")` }}
+                  />
+                )}
+                {!displayItem && definition.slot === "ANDROID" && (
+                  <span
+                    className="equipment-slot-icon"
+                    aria-hidden="true"
+                    style={{ backgroundImage: `url("${DEFAULT_ANDROID_ICON_URL}")` }}
                   />
                 )}
                 {item?.starForce != null && <small>{item.starForce}★</small>}
