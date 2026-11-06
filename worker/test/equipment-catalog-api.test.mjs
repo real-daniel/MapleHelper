@@ -46,6 +46,7 @@ describe("equipment catalog API", () => {
     database.exec(readFileSync(new URL("../../migrations/0015_full_astra_secondaries.sql", import.meta.url), "utf8"));
     database.exec(readFileSync(new URL("../../migrations/0016_destiny_weapon_phase.sql", import.meta.url), "utf8"));
     database.exec(readFileSync(new URL("../../migrations/0017_oz_skill_rings.sql", import.meta.url), "utf8"));
+    database.exec(readFileSync(new URL("../../migrations/0018_earrings_catalog.sql", import.meta.url), "utf8"));
     database.prepare("UPDATE equipment_catalog_items SET base_stats=?,star_force_profile='ARMOR_ACCESSORY',set_name='Eternal',maple_item_id=1005982 WHERE name='Eternal Bowman Hat'")
       .run('{"DEX":50,"Attack Power":6}');
     env = { DB: d1(database), APP_URL: "http://localhost:8787" };
@@ -154,6 +155,15 @@ describe("equipment catalog API", () => {
       level_requirement: 110,
       base_stats: '{"STR":4,"DEX":4,"INT":4,"LUK":4,"Attack Power":4,"Magic Attack":4}',
       star_force_profile: "NONE",
+    });
+  });
+
+  it("stores the standard earring progression with exact stats and item identities", () => {
+    expect(database.prepare("SELECT COUNT(*) AS count FROM equipment_catalog_items WHERE slot='EARRINGS'").get().count).toBe(4);
+    expect(database.prepare("SELECT level_requirement,base_stats,maple_item_id FROM equipment_catalog_items WHERE name='Estella Earrings'").get()).toMatchObject({
+      level_requirement: 160,
+      base_stats: '{"STR":7,"DEX":7,"INT":7,"LUK":7,"Max HP":300,"Max MP":300,"Attack Power":2,"Magic Attack":2,"Defense":100}',
+      maple_item_id: 1032311,
     });
   });
 
