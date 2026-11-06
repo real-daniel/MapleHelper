@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { cubeRates } from "./cube-rates";
-import { isBlackHeart, itemStarForceCap, supportsItemPotential } from "./equipment-rules";
+import { isBlackHeart, itemStarForceCap, supportsFlames, supportsItemPotential } from "./equipment-rules";
 import { equipmentJobGroup } from "./equipment-names";
 import type { EquipmentItem, EquipmentSlot } from "./equipment-manager";
 import {
@@ -11,13 +11,14 @@ import {
   type StarForceSettings,
 } from "./star-force-settings";
 import { starForceBonuses, type StarForceStat } from "../../../shared/star-force";
+import { analyzeMesoFlame, type FlameWeights } from "../../../shared/flame";
 
 type MainStat = "STR" | "DEX" | "INT" | "LUK";
 type CubeTier = "rare" | "epic" | "unique" | "legendary";
 type CubeTierNumber = 0 | 1 | 2 | 3;
 type RecommendationCubeType = "red" | "black";
 type CubeItemType = "accessory" | "badge" | "belt" | "bottom" | "cape" | "emblem" | "gloves" | "hat" | "heart" | "overall" | "top" | "secondary" | "shoes" | "shoulder" | "weapon";
-type UpgradeKind = "Star Force" | "Cubing";
+type UpgradeKind = "Star Force" | "Cubing" | "Flaming";
 
 type Recommendation = {
   id: string;
@@ -168,6 +169,7 @@ export function UpgradeRecommendations({ equipment, selectedProfileId, character
         <h2>Next upgrade recommendations</h2>
         <span className="muted">{selectedProfileId ? `${equipment.length} saved item(s)` : "Select a profile first"}</span>
       </div>
+      <p className="muted">Preliminary model: Star Force, main potential, and GMS meso flame resets. Bonus potential is intentionally excluded.</p>
 
       <div className="field-grid">
         <label>
@@ -226,6 +228,7 @@ export function buildRecommendations(
     .flatMap((item) => [
       starForceRecommendation(item, mainStat, equivalencies, starForceSettings, characterJob),
       cubingRecommendation(item, mainStat, equivalencies),
+      flameRecommendation(item, mainStat, equivalencies),
     ])
     .filter((candidate): candidate is Recommendation => candidate != null && Number.isFinite(candidate.efficiency))
     .sort((left, right) => right.efficiency - left.efficiency);
@@ -344,6 +347,61 @@ function cubingRecommendation(item: EquipmentItem, mainStat: MainStat, equivalen
     efficiency: damageGain / (expectedCost / 1_000_000_000),
     notes: `${targetTier === tier ? "" : "Bright cubes for tier-up, "}${target.cubeType === "black" ? "Bright" : "Red"} cubes for reroll. Benchmark step: ${target.description}.`,
   };
+}
+
+function flameRecommendation(item: EquipmentItem, mainStat: MainStat, equivalencies: Map<string, number>) {
+  if (!supportsFlames(item.slot, item.name) || /sweetwater/i.test(item.name) || item.levelRequirement == null) return null;
+  const weights: FlameWeights = {
+    stats: { [mainStat]: equivalencies.get(mainStat) ?? 0 },
+    allStat: equivalencies.get("All Stat%") ?? 0,
+    attack: equivalencies.get("Attack") ?? 0,
+    bossDamage: equivalencies.get("Boss Damage") ?? 0,
+    damage: equivalencies.get("Damage") ?? 0,
+  };
+  if (Object.values(weights.stats).every((weight) => !weight) && !weights.allStat && !weights.attack && !weights.bossDamage && !weights.damage) return null;
+
+  const magicAttack = mainStat === "INT";
+  const analysis = analyzeMesoFlame({
+    level: item.levelRequirement,
+    equipmentKind: item.slot === "WEAPON" ? "weapon" : "armor",
+    flameAdvantaged: isFlameAdvantaged(item),
+    baseAttack: item.catalogBaseStats?.[magicAttack ? "Magic Attack" : "Attack Power"] ?? 0,
+    magicAttack,
+    weights,
+  }, currentFlameDamage(item.flameStats, mainStat, equivalencies));
+  if (analysis.betterChance <= 0 || analysis.expectedGain <= 0 || !Number.isFinite(analysis.expectedCost)) return null;
+
+  return {
+    id: `flame-${item.id}-${analysis.currentScore.toFixed(6)}`,
+    kind: "Flaming" as const,
+    item,
+    action: "meso reset until better",
+    expectedCost: analysis.expectedCost,
+    damageGain: analysis.expectedGain,
+    efficiency: analysis.expectedGain / (analysis.expectedCost / 1_000_000_000),
+    notes: `${(analysis.betterChance * 100).toFixed(2)}% chance per 3m reset; keep the old result unless the new flame is better.`,
+  };
+}
+
+function currentFlameDamage(lines: string, mainStat: MainStat, equivalencies: Map<string, number>) {
+  let total = 0;
+  for (const line of lines.split(/\r?\n/)) {
+    const match = line.match(/^(.+?):?\s*\+?(-?[\d,]+)(%)?/);
+    if (!match) continue;
+    const label = normalizeLabel(match[1]);
+    const value = Number(match[2].replaceAll(",", ""));
+    if (label === mainStat) total += value * (equivalencies.get(mainStat) ?? 0);
+    else if (label === "All Stat%") total += value * (equivalencies.get("All Stat%") ?? 0);
+    else if (label === "Attack") total += value * (equivalencies.get("Attack") ?? 0);
+    else if (label === "Boss Damage") total += value * (equivalencies.get("Boss Damage") ?? 0);
+    else if (label === "Damage") total += value * (equivalencies.get("Damage") ?? 0);
+  }
+  return total;
+}
+
+function isFlameAdvantaged(item: EquipmentItem) {
+  const advantagedSets = new Set(["Absolab", "Arcane Umbra", "Boss Accessory", "Brilliant Boss", "Dawn Boss", "Eternal", "Genesis", "Pitched Boss", "Root Abyss"]);
+  return advantagedSets.has(item.catalogSetName ?? "") || /^(?:genesis|destiny)\b/i.test(item.name);
 }
 
 function parseEquivalencies(text: string) {
@@ -916,6 +974,7 @@ function parseTier(value: string): CubeTier {
 function normalizeLabel(value: string) {
   const compact = value.toLowerCase().replace(/[^a-z%]/g, "");
   if (compact.includes("boss")) return "Boss Damage";
+  if (compact === "damage" || compact === "damage%") return "Damage";
   if (compact.includes("critical")) return "Critical Dmg";
   if (compact.includes("ignore") || compact.includes("ied")) return "IED";
   if (compact.includes("allstat")) return "All Stat%";

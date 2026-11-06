@@ -70,6 +70,15 @@ describe("preliminary upgrade recommendations", () => {
       item({ id: 3, slot: "HEART", name: "Black Heart", levelRequirement: 120, starForce: 15, catalogStarForceProfile: "NONE", potentialLines: "Boss Damage +30%\nIgnore Enemy Defense +30%" }),
       item({ id: 4, slot: "RING", name: "Ring of Restraint", levelRequirement: 110, starForce: null, catalogStarForceProfile: "NONE", potentialTier: "", potentialLines: "" }),
     ], "STR", equivalencies, DEFAULT_STAR_FORCE_SETTINGS, "Adele");
-    expect(recommendations).toEqual([]);
+    expect(recommendations.some((recommendation) => recommendation.kind === "Cubing")).toBe(false);
+  });
+
+  it("prices meso flame improvements but excludes non-rerollable Sweetwater flames", () => {
+    const recommendations = buildRecommendations([
+      item({ id: 5, starForce: 30, catalogSetName: "Eternal", flameStats: "STR: +20" }),
+      item({ id: 6, slot: "PENDANT", name: "Sweetwater Pendant", starForce: 30, catalogSetName: "Sweetwater", flameStats: "STR: +70\nAll Stat: +6%" }),
+    ], "STR", equivalencies, DEFAULT_STAR_FORCE_SETTINGS, "Adele");
+    expect(recommendations.some((recommendation) => recommendation.kind === "Flaming" && recommendation.item.id === 5)).toBe(true);
+    expect(recommendations.some((recommendation) => recommendation.kind === "Flaming" && recommendation.item.id === 6)).toBe(false);
   });
 });
