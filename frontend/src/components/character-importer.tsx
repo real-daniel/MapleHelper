@@ -219,7 +219,7 @@ export function CharacterImporter() {
             <EquipmentManager profileId={selectedProfile.id} characterName={selectedProfile.name} characterJob={selectedProfile.job} characterImageUrl={selectedProfile.imageUrl} equipment={equipment} activePreset={activeEquipmentPreset} onPresetChange={setActiveEquipmentPreset} onChange={setEquipment} onMessage={setMessage} />
           )}
 
-          {characterView === "upgrades" && <UpgradeRecommendations equipment={equipment.filter((item) => (item.presetNumber ?? 1) === activeEquipmentPreset)} selectedProfileId={selectedProfileId} />}
+          {characterView === "upgrades" && <UpgradeRecommendations key={selectedProfile.id} equipment={equipment.filter((item) => (item.presetNumber ?? 1) === activeEquipmentPreset)} selectedProfileId={selectedProfileId} characterJob={selectedProfile.job} />}
 
           {characterView === "stats" && <StatEquivalencyOcr key={selectedProfile.id} characterName={selectedProfile.name} />}
 

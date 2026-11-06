@@ -1,33 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { cubeRates } from "@/components/cube-rates";
+import { cubeRates } from "./cube-rates";
+import { isBlackHeart, itemStarForceCap, supportsItemPotential } from "./equipment-rules";
+import { equipmentJobGroup } from "./equipment-names";
+import type { EquipmentItem, EquipmentSlot } from "./equipment-manager";
 import {
   loadStarForceSettings,
   STAR_FORCE_SETTINGS_EVENT,
   type StarForceSettings,
-} from "@/components/star-force-settings";
-
-type EquipmentSlot =
-  | "RING" | "PENDANT"
-  | "WEAPON" | "SECONDARY" | "EMBLEM"
-  | "HAT" | "FACE" | "EYE" | "EARRINGS"
-  | "TOP" | "BOTTOM" | "SHOES" | "GLOVES" | "CAPE"
-  | "BELT" | "SHOULDER" | "POCKET" | "BADGE" | "MEDAL"
-  | "ANDROID" | "HEART"
-  | "TOTEM";
-
-type EquipmentItem = {
-  id: number;
-  slot: EquipmentSlot;
-  slotIndex: number | null;
-  name: string;
-  levelRequirement: number | null;
-  starForce: number | null;
-  statLines: string;
-  potentialTier: string;
-  potentialLines: string;
-};
+} from "./star-force-settings";
+import { starForceBonuses, type StarForceStat } from "../../../shared/star-force";
 
 type MainStat = "STR" | "DEX" | "INT" | "LUK";
 type CubeTier = "rare" | "epic" | "unique" | "legendary";
@@ -154,22 +137,8 @@ const MAX_CUBE_CATEGORY_COUNT: Record<string, number> = {
   [CUBE_CATEGORY.INVINCIBLE_PERC]: 2,
 };
 
-const HIGH_STAR_VALUES: Record<string, Array<[number, number]>> = {
-  "128-137": [[47, 7], [54, 15], [61, 24], [68, 34], [75, 45]],
-  "138-149": [[49, 8], [58, 17], [67, 27], [76, 38], [85, 50], [94, 63], [103, 78], [103, 95], [103, 114], [103, 135], [103, 157], [103, 180], [103, 204], [103, 229], [103, 255]],
-  "150-159": [[51, 9], [62, 19], [73, 30], [84, 42], [95, 55], [106, 69], [117, 85], [117, 103], [117, 123], [117, 145], [117, 168], [117, 192], [117, 217], [117, 243], [117, 270]],
-  "160-199": [[53, 10], [66, 21], [79, 33], [92, 46], [105, 60], [118, 75], [131, 92], [131, 111], [131, 132], [131, 155], [131, 179], [131, 204], [131, 230], [131, 257], [131, 285]],
-  "200-249": [[55, 12], [70, 25], [85, 39], [100, 54], [115, 70], [130, 87], [145, 106], [145, 127], [145, 150], [145, 175], [145, 201], [145, 228], [145, 256], [145, 285], [145, 315]],
-  "250-300": [[57, 14], [74, 29], [91, 45], [108, 62], [125, 80], [142, 99], [159, 120], [159, 143], [159, 168], [159, 195], [159, 223], [159, 252], [159, 282], [159, 313], [159, 345]],
-};
-
-const LOW_STAR_VALUES: Array<[number, number]> = [
-  [0, 0], [2, 0], [4, 0], [6, 0], [8, 0], [10, 1], [13, 1], [16, 2],
-  [19, 2], [22, 3], [25, 3], [28, 4], [31, 4], [34, 5], [37, 6], [40, 7],
-];
-
-export function UpgradeRecommendations({ equipment, selectedProfileId }: { equipment: EquipmentItem[]; selectedProfileId: string }) {
-  const [mainStat, setMainStat] = useState<MainStat>("STR");
+export function UpgradeRecommendations({ equipment, selectedProfileId, characterJob }: { equipment: EquipmentItem[]; selectedProfileId: string; characterJob: string }) {
+  const [mainStat, setMainStat] = useState<MainStat>(() => mainStatForJob(characterJob));
   const [equivalencyText, setEquivalencyText] = useState(SAMPLE_EQUIVALENCIES);
   const [starForceSettings, setStarForceSettings] = useState<StarForceSettings>(() => loadStarForceSettings());
 
@@ -185,8 +154,8 @@ export function UpgradeRecommendations({ equipment, selectedProfileId }: { equip
 
   const equivalencies = useMemo(() => parseEquivalencies(equivalencyText), [equivalencyText]);
   const recommendations = useMemo(
-    () => buildRecommendations(equipment, mainStat, equivalencies, starForceSettings),
-    [equipment, equivalencies, mainStat, starForceSettings],
+    () => buildRecommendations(equipment, mainStat, equivalencies, starForceSettings, characterJob),
+    [characterJob, equipment, equivalencies, mainStat, starForceSettings],
   );
   const visibleRecommendations = useMemo(
     () => visibleRecommendationRows(recommendations),
@@ -246,15 +215,16 @@ export function UpgradeRecommendations({ equipment, selectedProfileId }: { equip
   );
 }
 
-function buildRecommendations(
+export function buildRecommendations(
   equipment: EquipmentItem[],
   mainStat: MainStat,
   equivalencies: Map<string, number>,
   starForceSettings: StarForceSettings,
+  characterJob: string,
 ) {
   return equipment
     .flatMap((item) => [
-      starForceRecommendation(item, mainStat, equivalencies, starForceSettings),
+      starForceRecommendation(item, mainStat, equivalencies, starForceSettings, characterJob),
       cubingRecommendation(item, mainStat, equivalencies),
     ])
     .filter((candidate): candidate is Recommendation => candidate != null && Number.isFinite(candidate.efficiency))
@@ -278,21 +248,57 @@ function visibleRecommendationRows(recommendations: Recommendation[]) {
   ];
 }
 
+export function mainStatForJob(jobName: string): MainStat {
+  const normalized = jobName.trim().toLowerCase();
+  if (["corsair", "captain", "mechanic", "angelic buster", "jett", "xenon"].some((job) => normalized.includes(job))) return "DEX";
+  const group = equipmentJobGroup(jobName);
+  if (group === "Magician") return "INT";
+  if (group === "Bowman") return "DEX";
+  if (group === "Thief") return "LUK";
+  return "STR";
+}
+
+function starForceBaseStats(baseStats: Record<string, number> | null): Partial<Record<StarForceStat, number>> {
+  const labels: Record<string, StarForceStat> = {
+    STR: "STR", DEX: "DEX", INT: "INT", LUK: "LUK", "Max HP": "MAX_HP", "Max MP": "MAX_MP",
+    "Attack Power": "ATTACK_POWER", "Magic Attack": "MAGIC_ATTACK", Defense: "DEFENSE", Speed: "SPEED", Jump: "JUMP",
+  };
+  const result: Partial<Record<StarForceStat, number>> = {};
+  for (const [label, amount] of Object.entries(baseStats ?? {})) {
+    const stat = labels[label];
+    if (stat && Number.isFinite(amount)) result[stat] = amount;
+  }
+  return result;
+}
+
+function hasProtectedUtilityPotential(lines: string) {
+  return /cooldown|item drop|meso (?:amount|obtained)|auto steal/i.test(lines);
+}
+
 function starForceRecommendation(
   item: EquipmentItem,
   mainStat: MainStat,
   equivalencies: Map<string, number>,
   settings: StarForceSettings,
+  characterJob: string,
 ) {
   const level = item.levelRequirement ?? 0;
   const current = item.starForce ?? 0;
-  const cap = maxStars(level);
-  if (!isStarrable(item) || level <= 0 || current >= cap) return null;
+  const cap = itemStarForceCap(item.slot, item.name, item.levelRequirement, item.catalogStarForceProfile, item.astraStage, characterJob, item.destinyStage);
+  if (level <= 0 || cap <= 0 || current >= cap) return null;
 
-  const currentStats = starStats(level, current);
-  const nextStats = starStats(level, current + 1);
-  const statGain = Math.max(0, nextStats.main - currentStats.main);
-  const attackGain = Math.max(0, nextStats.attack - currentStats.attack);
+  const facts = {
+    name: item.name,
+    slot: item.slot,
+    levelRequirement: item.levelRequirement,
+    starForceProfile: item.catalogStarForceProfile,
+    baseStats: starForceBaseStats(item.catalogBaseStats),
+  };
+  const currentStats = starForceBonuses(facts, current);
+  const nextStats = starForceBonuses(facts, current + 1);
+  const attackStat: StarForceStat = mainStat === "INT" ? "MAGIC_ATTACK" : "ATTACK_POWER";
+  const statGain = Math.max(0, (nextStats[mainStat] ?? 0) - (currentStats[mainStat] ?? 0));
+  const attackGain = Math.max(0, (nextStats[attackStat] ?? 0) - (currentStats[attackStat] ?? 0));
   const damageGain = statGain * (equivalencies.get(mainStat) ?? 0) + attackGain * (equivalencies.get("Attack") ?? 0);
   const expectedCost = expectedStarCost(level, current, current + 1, settings);
   if (damageGain <= 0 || expectedCost <= 0) return null;
@@ -310,7 +316,7 @@ function starForceRecommendation(
 }
 
 function cubingRecommendation(item: EquipmentItem, mainStat: MainStat, equivalencies: Map<string, number>) {
-  if (!isPotentialEligible(item)) return null;
+  if (!supportsItemPotential(item.slot, item.name) || isBlackHeart(item.slot, item.name) || hasProtectedUtilityPotential(item.potentialLines)) return null;
 
   const tier = parseTier(item.potentialTier);
   const currentDamage = potentialDamage(item.potentialLines, mainStat, equivalencies, item.slot);
@@ -819,23 +825,6 @@ function revealCost(level: number) {
   return 20 * level ** 2;
 }
 
-function starStats(level: number, star: number) {
-  if (star <= 15) {
-    const [main, attack] = LOW_STAR_VALUES[star] ?? LOW_STAR_VALUES[15];
-    return { main, attack };
-  }
-  const row = highStarRows(level)[star - 16] ?? highStarRows(level).at(-1) ?? [0, 0];
-  return { main: row[0], attack: row[1] };
-}
-
-function highStarRows(level: number) {
-  const key = Object.keys(HIGH_STAR_VALUES).find((band) => {
-    const [min, max] = band.split("-").map(Number);
-    return level >= min && level <= max;
-  });
-  return key ? HIGH_STAR_VALUES[key] : HIGH_STAR_VALUES["200-249"];
-}
-
 function expectedStarCost(level: number, current: number, target: number, settings: StarForceSettings) {
   const costs = new Float64Array(target + 1);
   for (let pass = 0; pass < 5000; pass++) {
@@ -908,10 +897,6 @@ function baseCost(level: number, star: number) {
   return 100 * Math.round((roundedLevel ** 3 * (star + 1) ** 2.7) / (divisor[star] ?? 20000) + 10);
 }
 
-function maxStars(level: number) {
-  return level === 0 ? 30 : level < 95 ? 5 : level < 108 ? 8 : level < 118 ? 10 : level < 128 ? 15 : level < 138 ? 20 : 30;
-}
-
 function recoveryStar(star: number) {
   if (star <= 19) return 12;
   if (star === 20) return 15;
@@ -926,16 +911,6 @@ function parseTier(value: string): CubeTier {
   if (normalized.includes("unique")) return "unique";
   if (normalized.includes("epic")) return "epic";
   return "rare";
-}
-
-function isStarrable(item: EquipmentItem) {
-  return !isSkillRingName(item.name)
-    && !["SECONDARY", "EMBLEM", "POCKET", "BADGE", "MEDAL", "ANDROID", "TOTEM"].includes(item.slot);
-}
-
-function isPotentialEligible(item: EquipmentItem) {
-  return !isSkillRingName(item.name)
-    && !["POCKET", "MEDAL", "ANDROID", "TOTEM"].includes(item.slot);
 }
 
 function normalizeLabel(value: string) {
@@ -955,40 +930,6 @@ function normalizeLabel(value: string) {
   if (compact.includes("attack%")) return "Attack%";
   if (compact.includes("attack")) return "Attack";
   return value.trim();
-}
-
-function isSkillRingName(name: string) {
-  const normalized = name.toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
-  return [
-    "ring of restraint",
-    "continuous ring",
-    "risk taker ring",
-    "totalling ring",
-    "critical damage ring",
-    "ultimatum ring",
-    "cleansing ring",
-    "overdrive ring",
-    "health cut ring",
-    "critical defense ring",
-    "limit ring",
-    "durability ring",
-    "clean defense ring",
-    "berserker ring",
-    "mana cut ring",
-    "critical shift ring",
-    "stance shift ring",
-    "clean stance ring",
-    "swift ring",
-    "reflective ring",
-    "tower boost ring",
-    "ribbit ring",
-    "krrr ring",
-    "rawr ring",
-    "pew pew ring",
-  ].some((skillRingName) => normalized.includes(skillRingName))
-    || /\bweapon jump [sild] ring\b/.test(normalized)
-    || /\blevel jump [sild] ring\b/.test(normalized)
-    || /\bcrisis (hm|h|m) ring\b/.test(normalized);
 }
 
 function title(value: string) {
