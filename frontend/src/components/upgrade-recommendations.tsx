@@ -19,6 +19,7 @@ type CubeTierNumber = 0 | 1 | 2 | 3;
 type RecommendationCubeType = "red" | "black";
 type CubeItemType = "accessory" | "badge" | "belt" | "bottom" | "cape" | "emblem" | "gloves" | "hat" | "heart" | "overall" | "top" | "secondary" | "shoes" | "shoulder" | "weapon";
 type UpgradeKind = "Star Force" | "Cubing" | "Flaming";
+type UpgradeCategory = "All" | UpgradeKind;
 
 type Recommendation = {
   id: string;
@@ -138,10 +139,13 @@ const MAX_CUBE_CATEGORY_COUNT: Record<string, number> = {
   [CUBE_CATEGORY.INVINCIBLE_PERC]: 2,
 };
 
+const UPGRADE_CATEGORIES: UpgradeCategory[] = ["All", "Star Force", "Flaming", "Cubing"];
+
 export function UpgradeRecommendations({ equipment, selectedProfileId, characterJob }: { equipment: EquipmentItem[]; selectedProfileId: string; characterJob: string }) {
   const [mainStat, setMainStat] = useState<MainStat>(() => mainStatForJob(characterJob));
   const [equivalencyText, setEquivalencyText] = useState(SAMPLE_EQUIVALENCIES);
   const [starForceSettings, setStarForceSettings] = useState<StarForceSettings>(() => loadStarForceSettings());
+  const [category, setCategory] = useState<UpgradeCategory>("All");
 
   useEffect(() => {
     const syncSettings = () => setStarForceSettings(loadStarForceSettings());
@@ -158,9 +162,13 @@ export function UpgradeRecommendations({ equipment, selectedProfileId, character
     () => buildRecommendations(equipment, mainStat, equivalencies, starForceSettings, characterJob),
     [characterJob, equipment, equivalencies, mainStat, starForceSettings],
   );
+  const filteredRecommendations = useMemo(
+    () => recommendationsForCategory(recommendations, category),
+    [category, recommendations],
+  );
   const visibleRecommendations = useMemo(
-    () => visibleRecommendationRows(recommendations),
-    [recommendations],
+    () => visibleRecommendationRows(filteredRecommendations, category === "All"),
+    [category, filteredRecommendations],
   );
 
   return (
@@ -190,28 +198,44 @@ export function UpgradeRecommendations({ equipment, selectedProfileId, character
       {recommendations.length === 0 ? (
         <p className="muted">Save starrable or cubeable equipment with stat equivalencies to rank upgrades.</p>
       ) : (
-        <div className="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>Rank</th><th>Upgrade</th><th>Item</th><th>Gain</th><th>Expected cost</th><th>Efficiency</th><th>Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleRecommendations.map(({ recommendation, rank }) => (
-                <tr key={recommendation.id}>
-                  <td>{rank}</td>
-                  <td>{recommendation.kind}: {recommendation.action}</td>
-                  <td>{recommendation.item.name}</td>
-                  <td>{recommendation.damageGain.toFixed(4)}% FD</td>
-                  <td>{formatMeso(recommendation.expectedCost)}</td>
-                  <td>{recommendation.efficiency.toFixed(4)}% FD / b</td>
-                  <td>{recommendation.notes}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div className="recommendation-toolbar">
+            <span className="muted">Category</span>
+            <div className="segmented" role="group" aria-label="Upgrade recommendation category">
+              {UPGRADE_CATEGORIES.map((option) => {
+                const count = option === "All" ? recommendations.length : recommendations.filter((recommendation) => recommendation.kind === option).length;
+                return <button key={option} type="button" aria-pressed={category === option} onClick={() => setCategory(option)}>{option} ({count})</button>;
+              })}
+            </div>
+          </div>
+          {filteredRecommendations.length === 0 ? (
+            <p className="muted">No {category.toLowerCase()} recommendations for the current equipment.</p>
+          ) : (
+            <div className="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Rank</th><th>Category</th><th>Upgrade</th><th>Item</th><th>Gain</th><th>Expected cost</th><th>Efficiency</th><th>Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleRecommendations.map(({ recommendation, rank }) => (
+                    <tr key={recommendation.id}>
+                      <td>{rank}</td>
+                      <td>{recommendation.kind}</td>
+                      <td>{recommendation.action}</td>
+                      <td>{recommendation.item.name}</td>
+                      <td>{recommendation.damageGain.toFixed(4)}% FD</td>
+                      <td>{formatMeso(recommendation.expectedCost)}</td>
+                      <td>{recommendation.efficiency.toFixed(4)}% FD / b</td>
+                      <td>{recommendation.notes}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       )}
     </section>
   );
@@ -234,9 +258,13 @@ export function buildRecommendations(
     .sort((left, right) => right.efficiency - left.efficiency);
 }
 
-function visibleRecommendationRows(recommendations: Recommendation[]) {
+export function recommendationsForCategory(recommendations: Recommendation[], category: UpgradeCategory) {
+  return category === "All" ? recommendations : recommendations.filter((recommendation) => recommendation.kind === category);
+}
+
+function visibleRecommendationRows(recommendations: Recommendation[], ensureStarForce = true) {
   const topRows = recommendations.slice(0, 12).map((recommendation, index) => ({ recommendation, rank: index + 1 }));
-  if (topRows.some(({ recommendation }) => recommendation.kind === "Star Force")) {
+  if (!ensureStarForce || topRows.some(({ recommendation }) => recommendation.kind === "Star Force")) {
     return topRows;
   }
 

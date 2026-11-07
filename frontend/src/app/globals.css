@@ -309,6 +309,9 @@ dd { margin: 0; }
 .segmented { display: flex; padding: 2px; border: 1px solid var(--border); border-radius: 5px; }
 .segmented button { min-height: 30px; padding: 4px 10px; border: 0; border-radius: 3px; background: transparent; color: var(--muted); font-size: 12px; }
 .segmented button[aria-pressed="true"] { background: var(--surface-raised); color: var(--text); }
+.recommendation-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 16px 0 10px; }
+.recommendation-toolbar .segmented { overflow-x: auto; }
+.recommendation-toolbar button { white-space: nowrap; }
 .boss-table th { border-top: 0; }
 .boss-table td { height: 58px; padding: 8px; }
 .boss-table td:nth-child(2) { min-width: 210px; }

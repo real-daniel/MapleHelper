@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_STAR_FORCE_SETTINGS } from "./star-force-settings";
 import type { EquipmentItem } from "./equipment-manager";
-import { buildRecommendations, mainStatForJob } from "./upgrade-recommendations";
+import { buildRecommendations, mainStatForJob, recommendationsForCategory } from "./upgrade-recommendations";
 
 const equivalencies = new Map([
   ["STR", 0.01], ["DEX", 0.01], ["INT", 0.01], ["LUK", 0.01],
@@ -80,5 +80,16 @@ describe("preliminary upgrade recommendations", () => {
     ], "STR", equivalencies, DEFAULT_STAR_FORCE_SETTINGS, "Adele");
     expect(recommendations.some((recommendation) => recommendation.kind === "Flaming" && recommendation.item.id === 5)).toBe(true);
     expect(recommendations.some((recommendation) => recommendation.kind === "Flaming" && recommendation.item.id === 6)).toBe(false);
+  });
+
+  it("filters the ranked plan by upgrade category without changing efficiency order", () => {
+    const recommendations = buildRecommendations([
+      item({ id: 7, starForce: 20, catalogSetName: "Eternal", flameStats: "STR: +20" }),
+    ], "STR", equivalencies, DEFAULT_STAR_FORCE_SETTINGS, "Adele");
+    const flames = recommendationsForCategory(recommendations, "Flaming");
+    const stars = recommendationsForCategory(recommendations, "Star Force");
+    expect(flames.every((recommendation) => recommendation.kind === "Flaming")).toBe(true);
+    expect(stars.every((recommendation) => recommendation.kind === "Star Force")).toBe(true);
+    expect(recommendationsForCategory(recommendations, "All")).toEqual(recommendations);
   });
 });
