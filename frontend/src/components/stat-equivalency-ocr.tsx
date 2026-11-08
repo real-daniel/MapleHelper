@@ -42,8 +42,13 @@ export function StatEquivalencyOcr({ profileId, characterName, characterJob, ini
       if (!response.ok) throw new Error(body.message ?? "Stat equivalency extraction failed.");
       const extraction = body as CharacterStatEquivalencyExtraction;
       setResult(extraction);
-      setEquivalencies((current) => mergeEquivalencies(fields, current, extraction.equivalencies));
-      setMessage("OCR values imported into the manual fields. Review them, then save.");
+      if (extraction.extractionStatus === "STAT_EQUIVALENCIES_UNAVAILABLE") throw new Error(extraction.extractionNotes);
+      if (extraction.equivalencies.length === 0) {
+        setMessage(extraction.extractionNotes);
+      } else {
+        setEquivalencies((current) => mergeEquivalencies(fields, current, extraction.equivalencies));
+        setMessage(`Imported ${extraction.equivalencies.length} OCR row(s) into the manual fields. Review them, then save.`);
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Stat equivalency extraction failed.");
     } finally {

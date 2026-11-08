@@ -7,9 +7,15 @@ export interface StatEquivalency {
 const STAT_ALIASES: Record<string, string> = {
   ALLSTAT: "All Stat%", ALLSTATS: "All Stat%", "ALLSTAT%": "All Stat%", "ALLSTATS%": "All Stat%",
   ANSTAT: "All Stat%", "ANSTAT%": "All Stat%", ATTACKS: "Attack%", "ATTACK%S": "Attack%",
-  ATTACK: "Attack", "ATTACK%": "Attack%", BOSSDAMAGE: "Boss Damage", CRITICALDMG: "Critical Dmg",
+  ATT: "Attack", "ATT%": "Attack%", ATTACK: "Attack", "ATTACK%": "Attack%", ATTACKPOWER: "Attack",
+  "ATTACKPOWER%": "Attack%", MAGICATTACK: "Attack", "MAGICATTACK%": "Attack%", MATK: "Attack", "MATK%": "Attack%",
+  BOSSDAMAGE: "Boss Damage", "BOSSDAMAGE%": "Boss Damage", DAMAGE: "Damage", "DAMAGE%": "Damage",
+  CRITICALDMG: "Critical Dmg", CRITICALDAMAGE: "Critical Dmg", "CRITICALDAMAGE%": "Critical Dmg",
   DEX: "DEX", "DEX%": "DEX%", IGNOREDFF300: "Ignore Def(300)", IGNOREDFF380: "Ignore Def(380)",
-  IGNOREDEF300: "Ignore Def(300)", IGNOREDEF380: "Ignore Def(380)", STR: "STR", "STR%": "STR%",
+  IGNOREDEF300: "Ignore Def(300)", IGNOREDEF380: "Ignore Def(380)", IED300: "Ignore Def(300)", IED380: "Ignore Def(380)",
+  IGNOREENEMYDEFENSE300: "Ignore Def(300)", IGNOREENEMYDEFENSE380: "Ignore Def(380)",
+  STR: "STR", "STR%": "STR%", INT: "INT", "INT%": "INT%", LUK: "LUK", "LUK%": "LUK%",
+  MAXHP: "Max HP", "MAXHP%": "Max HP%", HP: "Max HP", "HP%": "Max HP%",
 };
 
 export function parseStatEquivalencyText(rawText: string | null | undefined): StatEquivalency[] {
@@ -26,13 +32,13 @@ export function parseStatEquivalencyText(rawText: string | null | undefined): St
 }
 
 export function parseStatEquivalencyLine(line: string): StatEquivalency | null {
-  const normalized = normalizeSpacing(line);
-  if (!normalized || normalized.toLowerCase().includes("final")) return null;
-  const match = normalized.match(/^(.+?)\s+(\d{1,4})\s+(\d+(?:[.,]\d+)?)\s*%?$/);
+  const normalized = normalizeSpacing(line).replace(/\s*(?:%\s*)?final\s+damage\s*$/i, "%");
+  if (!normalized) return null;
+  const match = normalized.match(/^(.+?)\s+\+?([\d,]{1,9})\s*(?:=|->)?\s*\+?(\d+(?:[.,]\d+)?)\s*%?$/);
   if (!match) return null;
   const stat = normalizeStat(match[1]);
   if (!stat) return null;
-  return { stat, quantity: Number.parseInt(match[2], 10), finalDamagePercent: Number.parseFloat(match[3].replace(",", ".")) };
+  return { stat, quantity: Number.parseInt(match[2].replaceAll(",", ""), 10), finalDamagePercent: Number.parseFloat(match[3].replace(",", ".")) };
 }
 
 export function formatStatEquivalencies(values: readonly StatEquivalency[]): string {
@@ -40,7 +46,8 @@ export function formatStatEquivalencies(values: readonly StatEquivalency[]): str
 }
 
 function normalizeSpacing(line: string): string {
-  return line.trim().replaceAll("|", " ").replace(/[‘’]/g, "").replaceAll("by%", "by %").replace(/\s+/g, " ");
+  return line.trim().replace(/^[-*•]+\s*/, "").replace(/[*_`]/g, "").replaceAll("|", " ")
+    .replace(/[‘’]/g, "").replaceAll("by%", "by %").replace(/\s+/g, " ");
 }
 function normalizeStat(value: string): string | null {
   const compact = value.replace(/[^A-Za-z0-9%]/g, "").toUpperCase();

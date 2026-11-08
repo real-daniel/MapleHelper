@@ -187,6 +187,25 @@ describe("remaining service parity helpers", () => {
     expect(formatStatEquivalencies(values)).toBe("Boss Damage: 40 = 3.628% final damage\nSTR%: 10 = 1.250% final damage");
   });
 
+  it("parses every class stat and common plain-text vision formatting", () => {
+    const values = parseStatEquivalencyText([
+      "* **INT** | 30 | 0.235%",
+      "LUK 30 0.120% final damage",
+      "Max HP 5,000 = 0.800% final damage",
+      "Magic Attack% | 12 | 4.827%",
+      "IED (380) 40 1.361%",
+      "Attack | +30 | +0.606%",
+    ].join("\n"));
+    expect(values).toEqual([
+      { stat: "INT", quantity: 30, finalDamagePercent: 0.235 },
+      { stat: "LUK", quantity: 30, finalDamagePercent: 0.12 },
+      { stat: "Max HP", quantity: 5000, finalDamagePercent: 0.8 },
+      { stat: "Attack%", quantity: 12, finalDamagePercent: 4.827 },
+      { stat: "Ignore Def(380)", quantity: 40, finalDamagePercent: 1.361 },
+      { stat: "Attack", quantity: 30, finalDamagePercent: 0.606 },
+    ]);
+  });
+
   it("uses the legacy fuzzy catalog threshold", () => {
     expect(findBestCatalogFacts(catalog, "S0urce of Sufferlng", "PENDANT", 160)?.name).toBe("Source of Suffering");
     expect(normalizeCatalogSlot("RING_4")).toBe("RING");

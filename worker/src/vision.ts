@@ -37,9 +37,13 @@ function extractJson(text: string): Record<string, unknown> {
 }
 
 async function runVision(env: Env, file: File, prompt: string): Promise<Record<string, unknown>> {
+  return extractJson(await runVisionText(env, file, prompt));
+}
+
+async function runVisionText(env: Env, file: File, prompt: string): Promise<string> {
   const image = [...new Uint8Array(await file.arrayBuffer())];
-  const result = await env.AI.run(MODEL, { image, prompt, max_tokens: 1800 });
-  return extractJson(extractText(result));
+  const result = await env.AI.run(MODEL, { image, prompt, max_tokens: 1800, temperature: 0 });
+  return extractText(result);
 }
 
 function text(value: unknown): string { return typeof value === "string" ? value.trim() : ""; }
@@ -123,16 +127,23 @@ function failedEquipmentDraft(file: File, status: string, notes: string) {
 
 export async function extractStatEquivalencies(env: Env, form: FormData) {
   const file = imageFromForm(form);
-  let data: Record<string, unknown>;
+  let responseText: string;
   try {
-    data = await runVision(env, file, "Transcribe this MapleStory stat-equivalency table line-for-line. Return only valid JSON: {\"rawText\":string,\"equivalencies\":[{\"stat\":string,\"quantity\":integer,\"finalDamagePercent\":number}]}. Preserve percent signs and decimals. Do not invent unreadable rows.");
+    responseText = await runVisionText(env, file, `Transcribe only the visible rows from this MapleStory stat-equivalency table. Return one row per line in exactly this format: STAT LABEL | QUANTITY | FINAL DAMAGE PERCENT. Do not return JSON, Markdown, headings, explanations, or guessed rows. Translate Korean stat labels to canonical English labels such as STR, DEX, INT, LUK, Max HP, Attack, Magic Attack, Boss Damage, Damage, Critical Dmg, All Stat%, and IED. Preserve decimal values.`);
   } catch (error) {
     console.error("Workers AI stat-equivalency extraction failed", error);
     return { equivalencies: [], lines: "", rawText: "", extractionStatus: "STAT_EQUIVALENCIES_UNAVAILABLE",
       extractionNotes: "Stat-equivalency extraction is temporarily unavailable." };
   }
+  let data: Record<string, unknown> = {};
+  try {
+    data = extractJson(responseText);
+  } catch {
+    // The vision model does not consistently honor JSON-only prompts. Its plain-text transcription is still parseable.
+  }
   const rawText = text(data.rawText);
-  let equivalencies = parseStatEquivalencyText(rawText);
+  const transcription = rawText || responseText;
+  let equivalencies = parseStatEquivalencyText(transcription);
   const aiRows = Array.isArray(data.equivalencies) ? data.equivalencies : [];
   const fallback = aiRows.flatMap((row): StatEquivalency[] => {
     if (!row || typeof row !== "object") return [];
@@ -146,8 +157,10 @@ export async function extractStatEquivalencies(env: Env, form: FormData) {
   return {
     equivalencies,
     lines: formatStatEquivalencies(equivalencies),
-    rawText,
-    extractionStatus: "STAT_EQUIVALENCIES_COMPLETED",
-    extractionNotes: `Workers AI transcribed the image; legacy-compatible parsing found ${equivalencies.length} table row(s).`,
+    rawText: transcription,
+    extractionStatus: equivalencies.length ? "STAT_EQUIVALENCIES_COMPLETED" : "STAT_EQUIVALENCIES_NO_ROWS",
+    extractionNotes: equivalencies.length
+      ? `Workers AI transcribed the image; deterministic parsing found ${equivalencies.length} table row(s).`
+      : "Workers AI returned text, but no stat-equivalency rows could be recognized. Try a tighter crop with the entire table visible.",
   };
 }
