@@ -47,6 +47,7 @@ describe("equipment catalog API", () => {
     database.exec(readFileSync(new URL("../../migrations/0016_destiny_weapon_phase.sql", import.meta.url), "utf8"));
     database.exec(readFileSync(new URL("../../migrations/0017_oz_skill_rings.sql", import.meta.url), "utf8"));
     database.exec(readFileSync(new URL("../../migrations/0018_earrings_catalog.sql", import.meta.url), "utf8"));
+    database.exec(readFileSync(new URL("../../migrations/0019_character_stat_equivalencies.sql", import.meta.url), "utf8"));
     database.prepare("UPDATE equipment_catalog_items SET base_stats=?,star_force_profile='ARMOR_ACCESSORY',set_name='Eternal',maple_item_id=1005982 WHERE name='Eternal Bowman Hat'")
       .run('{"DEX":50,"Attack Power":6}');
     env = { DB: d1(database), APP_URL: "http://localhost:8787" };

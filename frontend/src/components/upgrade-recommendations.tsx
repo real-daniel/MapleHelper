@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { cubeRates } from "./cube-rates";
 import { isBlackHeart, itemStarForceCap, supportsFlames, supportsItemPotential } from "./equipment-rules";
-import { equipmentJobGroup } from "./equipment-names";
 import type { EquipmentItem, EquipmentSlot } from "./equipment-manager";
+import { classStatProfile, type CharacterDamageStat, type ClassStatProfile } from "./class-stat-profiles";
+import { equivalencyMap, type CharacterStatEquivalency } from "./stat-equivalencies";
 import {
   loadStarForceSettings,
   STAR_FORCE_SETTINGS_EVENT,
@@ -13,7 +14,7 @@ import {
 import { starForceBonuses, type StarForceStat } from "../../../shared/star-force";
 import { analyzeMesoFlame, type FlameWeights } from "../../../shared/flame";
 
-type MainStat = "STR" | "DEX" | "INT" | "LUK";
+type MainStat = CharacterDamageStat;
 type CubeTier = "rare" | "epic" | "unique" | "legendary";
 type CubeTierNumber = 0 | 1 | 2 | 3;
 type RecommendationCubeType = "red" | "black";
@@ -43,16 +44,6 @@ type PotentialBenchmark = {
 
 type CubeLine = [string, number | string | string[], number];
 type ProbabilityInput = Record<keyof typeof EMPTY_CUBE_INPUT, number>;
-
-const SAMPLE_EQUIVALENCIES = `Boss Damage 40 3.628%
-Attack 30 0.606%
-Attack% 12 4.827%
-Critical Dmg 8 2.462%
-Ignore Dff(300) 40 1.067%
-Ignore Dff(380) 40 1.361%
-STR 30 0.235%
-STR% 12 1.060%
-All Stat% 9 0.907%`;
 
 const CUBE_TIER_ORDER: CubeTier[] = ["rare", "epic", "unique", "legendary"];
 const CUBE_TIER_NUMBER: Record<CubeTier, CubeTierNumber> = { rare: 0, epic: 1, unique: 2, legendary: 3 };
@@ -141,9 +132,7 @@ const MAX_CUBE_CATEGORY_COUNT: Record<string, number> = {
 
 const UPGRADE_CATEGORIES: UpgradeCategory[] = ["All", "Star Force", "Flaming", "Cubing"];
 
-export function UpgradeRecommendations({ equipment, selectedProfileId, characterJob }: { equipment: EquipmentItem[]; selectedProfileId: string; characterJob: string }) {
-  const [mainStat, setMainStat] = useState<MainStat>(() => mainStatForJob(characterJob));
-  const [equivalencyText, setEquivalencyText] = useState(SAMPLE_EQUIVALENCIES);
+export function UpgradeRecommendations({ equipment, selectedProfileId, characterJob, statEquivalencies }: { equipment: EquipmentItem[]; selectedProfileId: string; characterJob: string; statEquivalencies: CharacterStatEquivalency[] }) {
   const [starForceSettings, setStarForceSettings] = useState<StarForceSettings>(() => loadStarForceSettings());
   const [category, setCategory] = useState<UpgradeCategory>("All");
 
@@ -157,7 +146,9 @@ export function UpgradeRecommendations({ equipment, selectedProfileId, character
     };
   }, []);
 
-  const equivalencies = useMemo(() => parseEquivalencies(equivalencyText), [equivalencyText]);
+  const profile = useMemo(() => classStatProfile(characterJob), [characterJob]);
+  const mainStat = profile.primaryStats[0];
+  const equivalencies = useMemo(() => equivalencyMap(statEquivalencies), [statEquivalencies]);
   const recommendations = useMemo(
     () => buildRecommendations(equipment, mainStat, equivalencies, starForceSettings, characterJob),
     [characterJob, equipment, equivalencies, mainStat, starForceSettings],
@@ -177,23 +168,8 @@ export function UpgradeRecommendations({ equipment, selectedProfileId, character
         <h2>Next upgrade recommendations</h2>
         <span className="muted">{selectedProfileId ? `${equipment.length} saved item(s)` : "Select a profile first"}</span>
       </div>
-      <p className="muted">Preliminary model: Star Force, main potential, and GMS meso flame resets. Bonus potential is intentionally excluded.</p>
-
-      <div className="field-grid">
-        <label>
-          Main stat
-          <select value={mainStat} onChange={(event) => setMainStat(event.target.value as MainStat)}>
-            <option value="STR">STR</option>
-            <option value="DEX">DEX</option>
-            <option value="INT">INT</option>
-            <option value="LUK">LUK</option>
-          </select>
-        </label>
-        <label className="full-width-field">
-          Stat equivalencies
-          <textarea value={equivalencyText} onChange={(event) => setEquivalencyText(event.target.value)} />
-        </label>
-      </div>
+      <p className="muted">Uses the saved character equivalencies for {profile.primaryStats.join(" + ")} primary and {profile.secondaryStats.length ? profile.secondaryStats.join(" + ") : "no"} secondary stats. Bonus potential is intentionally excluded.</p>
+      {equivalencies.size === 0 && <p className="message">Enter and save this character&apos;s FD equivalencies under Stat equivalency before ranking upgrades.</p>}
 
       {recommendations.length === 0 ? (
         <p className="muted">Save starrable or cubeable equipment with stat equivalencies to rank upgrades.</p>
@@ -243,16 +219,17 @@ export function UpgradeRecommendations({ equipment, selectedProfileId, character
 
 export function buildRecommendations(
   equipment: EquipmentItem[],
-  mainStat: MainStat,
+  _mainStat: MainStat,
   equivalencies: Map<string, number>,
   starForceSettings: StarForceSettings,
   characterJob: string,
 ) {
+  const profile = classStatProfile(characterJob);
   return equipment
     .flatMap((item) => [
-      starForceRecommendation(item, mainStat, equivalencies, starForceSettings, characterJob),
-      cubingRecommendation(item, mainStat, equivalencies),
-      flameRecommendation(item, mainStat, equivalencies),
+      starForceRecommendation(item, profile, equivalencies, starForceSettings, characterJob),
+      cubingRecommendation(item, profile, equivalencies),
+      flameRecommendation(item, profile, equivalencies),
     ])
     .filter((candidate): candidate is Recommendation => candidate != null && Number.isFinite(candidate.efficiency))
     .sort((left, right) => right.efficiency - left.efficiency);
@@ -280,13 +257,7 @@ function visibleRecommendationRows(recommendations: Recommendation[], ensureStar
 }
 
 export function mainStatForJob(jobName: string): MainStat {
-  const normalized = jobName.trim().toLowerCase();
-  if (["corsair", "captain", "mechanic", "angelic buster", "jett", "xenon"].some((job) => normalized.includes(job))) return "DEX";
-  const group = equipmentJobGroup(jobName);
-  if (group === "Magician") return "INT";
-  if (group === "Bowman") return "DEX";
-  if (group === "Thief") return "LUK";
-  return "STR";
+  return classStatProfile(jobName).primaryStats[0];
 }
 
 function starForceBaseStats(baseStats: Record<string, number> | null): Partial<Record<StarForceStat, number>> {
@@ -308,7 +279,7 @@ function hasProtectedUtilityPotential(lines: string) {
 
 function starForceRecommendation(
   item: EquipmentItem,
-  mainStat: MainStat,
+  profile: ClassStatProfile,
   equivalencies: Map<string, number>,
   settings: StarForceSettings,
   characterJob: string,
@@ -327,10 +298,14 @@ function starForceRecommendation(
   };
   const currentStats = starForceBonuses(facts, current);
   const nextStats = starForceBonuses(facts, current + 1);
-  const attackStat: StarForceStat = mainStat === "INT" ? "MAGIC_ATTACK" : "ATTACK_POWER";
-  const statGain = Math.max(0, (nextStats[mainStat] ?? 0) - (currentStats[mainStat] ?? 0));
+  const attackStat: StarForceStat = profile.attackStat === "Magic Attack" ? "MAGIC_ATTACK" : "ATTACK_POWER";
+  const statGains = [...profile.primaryStats, ...profile.secondaryStats].map((stat) => {
+    const starStat: StarForceStat = stat === "Max HP" ? "MAX_HP" : stat;
+    return { stat, gain: Math.max(0, (nextStats[starStat] ?? 0) - (currentStats[starStat] ?? 0)) };
+  });
   const attackGain = Math.max(0, (nextStats[attackStat] ?? 0) - (currentStats[attackStat] ?? 0));
-  const damageGain = statGain * (equivalencies.get(mainStat) ?? 0) + attackGain * (equivalencies.get("Attack") ?? 0);
+  const damageGain = statGains.reduce((sum, { stat, gain }) => sum + gain * (equivalencies.get(stat) ?? 0), 0)
+    + attackGain * (equivalencies.get("Attack") ?? 0);
   const expectedCost = expectedStarCost(level, current, current + 1, settings);
   if (damageGain <= 0 || expectedCost <= 0) return null;
 
@@ -342,17 +317,17 @@ function starForceRecommendation(
     expectedCost,
     damageGain,
     efficiency: damageGain / (expectedCost / 1_000_000_000),
-    notes: `+${statGain} ${mainStat}, +${attackGain} Attack. Uses current Star Force calculator preset.`,
+    notes: `${statGains.filter(({ gain }) => gain > 0).map(({ stat, gain }) => `+${gain} ${stat}`).join(", ")}, +${attackGain} ${profile.attackStat}. Uses current Star Force calculator preset.`,
   };
 }
 
-function cubingRecommendation(item: EquipmentItem, mainStat: MainStat, equivalencies: Map<string, number>) {
+function cubingRecommendation(item: EquipmentItem, profile: ClassStatProfile, equivalencies: Map<string, number>) {
   if (!supportsItemPotential(item.slot, item.name) || isBlackHeart(item.slot, item.name) || hasProtectedUtilityPotential(item.potentialLines)) return null;
 
   const tier = parseTier(item.potentialTier);
-  const currentDamage = potentialDamage(item.potentialLines, mainStat, equivalencies, item.slot);
+  const currentDamage = potentialDamage(item.potentialLines, profile, equivalencies);
   const itemLevel = item.levelRequirement ?? 150;
-  const selection = selectCubingTarget(item, tier, itemLevel, currentDamage, mainStat, equivalencies);
+  const selection = selectCubingTarget(item, tier, itemLevel, currentDamage, profile, equivalencies);
   if (!selection) return null;
 
   const { target, targetTier } = selection;
@@ -377,18 +352,24 @@ function cubingRecommendation(item: EquipmentItem, mainStat: MainStat, equivalen
   };
 }
 
-function flameRecommendation(item: EquipmentItem, mainStat: MainStat, equivalencies: Map<string, number>) {
+function flameRecommendation(item: EquipmentItem, profile: ClassStatProfile, equivalencies: Map<string, number>) {
   if (!supportsFlames(item.slot, item.name) || /sweetwater/i.test(item.name) || item.levelRequirement == null) return null;
+  const flameStats = Object.fromEntries(
+    [...profile.primaryStats, ...profile.secondaryStats]
+      .filter((stat): stat is Exclude<CharacterDamageStat, "Max HP"> => stat !== "Max HP")
+      .map((stat) => [stat, equivalencies.get(stat) ?? 0]),
+  );
   const weights: FlameWeights = {
-    stats: { [mainStat]: equivalencies.get(mainStat) ?? 0 },
+    stats: flameStats,
+    maxHp: equivalencies.get("Max HP") ?? 0,
     allStat: equivalencies.get("All Stat%") ?? 0,
     attack: equivalencies.get("Attack") ?? 0,
     bossDamage: equivalencies.get("Boss Damage") ?? 0,
     damage: equivalencies.get("Damage") ?? 0,
   };
-  if (Object.values(weights.stats).every((weight) => !weight) && !weights.allStat && !weights.attack && !weights.bossDamage && !weights.damage) return null;
+  if (Object.values(weights.stats).every((weight) => !weight) && !weights.maxHp && !weights.allStat && !weights.attack && !weights.bossDamage && !weights.damage) return null;
 
-  const magicAttack = mainStat === "INT";
+  const magicAttack = profile.attackStat === "Magic Attack";
   const analysis = analyzeMesoFlame({
     level: item.levelRequirement,
     equipmentKind: item.slot === "WEAPON" ? "weapon" : "armor",
@@ -396,7 +377,7 @@ function flameRecommendation(item: EquipmentItem, mainStat: MainStat, equivalenc
     baseAttack: item.catalogBaseStats?.[magicAttack ? "Magic Attack" : "Attack Power"] ?? 0,
     magicAttack,
     weights,
-  }, currentFlameDamage(item.flameStats, mainStat, equivalencies));
+  }, currentFlameDamage(item.flameStats, equivalencies));
   if (analysis.betterChance <= 0 || analysis.expectedGain <= 0 || !Number.isFinite(analysis.expectedCost)) return null;
 
   return {
@@ -411,14 +392,14 @@ function flameRecommendation(item: EquipmentItem, mainStat: MainStat, equivalenc
   };
 }
 
-function currentFlameDamage(lines: string, mainStat: MainStat, equivalencies: Map<string, number>) {
+function currentFlameDamage(lines: string, equivalencies: Map<string, number>) {
   let total = 0;
   for (const line of lines.split(/\r?\n/)) {
     const match = line.match(/^(.+?):?\s*\+?(-?[\d,]+)(%)?/);
     if (!match) continue;
     const label = normalizeLabel(match[1]);
     const value = Number(match[2].replaceAll(",", ""));
-    if (label === mainStat) total += value * (equivalencies.get(mainStat) ?? 0);
+    if (["STR", "DEX", "INT", "LUK", "Max HP"].includes(label)) total += value * (equivalencies.get(label) ?? 0);
     else if (label === "All Stat%") total += value * (equivalencies.get("All Stat%") ?? 0);
     else if (label === "Attack") total += value * (equivalencies.get("Attack") ?? 0);
     else if (label === "Boss Damage") total += value * (equivalencies.get("Boss Damage") ?? 0);
@@ -432,32 +413,35 @@ function isFlameAdvantaged(item: EquipmentItem) {
   return advantagedSets.has(item.catalogSetName ?? "") || /^(?:genesis|destiny)\b/i.test(item.name);
 }
 
-function parseEquivalencies(text: string) {
-  const map = new Map<string, number>();
-  for (const line of text.split(/\r?\n/)) {
-    const match = line.match(/^\s*(.+?)\s+(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)%?\s*$/);
-    if (!match) continue;
-    const label = normalizeLabel(match[1]);
-    const quantity = Number(match[2]);
-    const finalDamage = Number(match[3]);
-    if (quantity > 0) map.set(label, finalDamage / quantity);
-  }
-  return map;
+export function potentialDamageForJob(lines: string, jobName: string, equivalencies: Map<string, number>) {
+  return potentialDamage(lines, classStatProfile(jobName), equivalencies);
 }
 
-function potentialDamage(lines: string, mainStat: MainStat, equivalencies: Map<string, number>, slot: EquipmentSlot) {
+function potentialDamage(lines: string, profile: ClassStatProfile, equivalencies: Map<string, number>) {
   let total = 0;
-  const ignoreGenericStat = slot === "WEAPON" || slot === "SECONDARY" || slot === "EMBLEM";
   for (const line of lines.split(/\r?\n/)) {
-    const value = Number(line.match(/(\d+)\s*%/)?.[1] ?? 0);
+    const amount = line.match(/([+-]?\d[\d,]*(?:\.\d+)?)\s*(%)?/);
+    if (!amount) continue;
+    const value = Math.abs(Number(amount[1].replaceAll(",", "")));
+    const percent = Boolean(amount[2]);
     const normalized = normalizeLabel(line);
     const normalizedLower = normalized.toLowerCase().replace(/[^a-z%]/g, "");
-    if (!ignoreGenericStat && normalizedLower.includes(mainStat.toLowerCase())) total += value * (equivalencies.get(`${mainStat}%`) ?? 0);
-    else if (!ignoreGenericStat && normalizedLower.includes("allstat")) total += value * (equivalencies.get("All Stat%") ?? 0);
-    else if (normalizedLower.includes("attack")) total += value * (equivalencies.get("Attack%") ?? 0);
-    else if (normalizedLower.includes("boss")) total += value * (equivalencies.get("Boss Damage") ?? 0);
-    else if (normalizedLower.includes("ignore") || normalizedLower.includes("ied")) total += value * (equivalencies.get("IED") ?? 0);
-    else if (normalizedLower.includes("criticaldmg")) total += value * (equivalencies.get("Critical Dmg") ?? 0);
+    if (normalizedLower.includes("allstat")) {
+      const weight = percent
+        ? equivalencies.get("All Stat%") ?? 0
+        : [...profile.primaryStats, ...profile.secondaryStats]
+          .filter((stat) => stat !== "Max HP")
+          .reduce((sum, stat) => sum + (equivalencies.get(stat) ?? 0), 0);
+      total += value * weight;
+    } else {
+      const matchingStat = [...profile.primaryStats, ...profile.secondaryStats]
+        .find((stat) => normalizedLower.includes(stat.toLowerCase().replace(" ", "")));
+      if (matchingStat) total += value * (equivalencies.get(percent ? `${matchingStat}%` : matchingStat) ?? 0);
+      else if (normalizedLower.includes("attack")) total += value * (equivalencies.get(percent ? "Attack%" : "Attack") ?? 0);
+      else if (normalizedLower.includes("boss")) total += value * (equivalencies.get("Boss Damage") ?? 0);
+      else if (normalizedLower.includes("ignore") || normalizedLower.includes("ied")) total += value * iedWeight(equivalencies);
+      else if (normalizedLower.includes("criticaldmg")) total += value * (equivalencies.get("Critical Dmg") ?? 0);
+    }
   }
   return total;
 }
@@ -467,12 +451,12 @@ function selectCubingTarget(
   currentTier: CubeTier,
   itemLevel: number,
   currentDamage: number,
-  mainStat: MainStat,
+  profile: ClassStatProfile,
   equivalencies: Map<string, number>,
 ) {
   for (let index = CUBE_TIER_ORDER.indexOf(currentTier); index < CUBE_TIER_ORDER.length; index++) {
     const tier = CUBE_TIER_ORDER[index];
-    const target = potentialBenchmarks(item.slot, tier, itemLevel, mainStat, equivalencies)
+    const target = potentialBenchmarks(item.slot, tier, itemLevel, profile, equivalencies)
       .find((benchmark) => benchmark.value > currentDamage);
     if (target) return { target, targetTier: tier };
   }
@@ -484,21 +468,22 @@ function potentialBenchmarks(
   slot: EquipmentSlot,
   tier: CubeTier,
   itemLevel: number,
-  mainStat: MainStat,
+  profile: ClassStatProfile,
   equivalencies: Map<string, number>,
 ): PotentialBenchmark[] {
-  if (slot === "GLOVES") return gloveBenchmarks(tier, itemLevel, mainStat, equivalencies);
+  if (slot === "GLOVES") return gloveBenchmarks(tier, itemLevel, profile, equivalencies);
   if (slot === "WEAPON" || slot === "SECONDARY" || slot === "EMBLEM") {
     return offensiveBenchmarks(slot, tier, itemLevel, equivalencies);
   }
 
-  return statBenchmarks(tier, itemLevel, mainStat, equivalencies);
+  return statBenchmarks(tier, itemLevel, profile, equivalencies);
 }
 
-function statBenchmarks(tier: CubeTier, itemLevel: number, mainStat: MainStat, equivalencies: Map<string, number>) {
+function statBenchmarks(tier: CubeTier, itemLevel: number, profile: ClassStatProfile, equivalencies: Map<string, number>) {
   const prime = primeLineValue(itemLevel, tier);
   const nonPrime = Math.max(1, prime - 3);
-  const statWeight = equivalencies.get(`${mainStat}%`) ?? equivalencies.get("All Stat%") ?? 0;
+  const bestStat = bestPotentialStat(profile, equivalencies);
+  const statWeight = bestStat.weight;
   const combinations = [
     { primeLines: 0, nonPrimeLines: 2 },
     { primeLines: 1, nonPrimeLines: 1 },
@@ -515,9 +500,9 @@ function statBenchmarks(tier: CubeTier, itemLevel: number, mainStat: MainStat, e
       return {
         value: amount * statWeight,
         difficulty: amount,
-        probabilityInput: cubeInput({ percStat: amount }),
+        probabilityInput: cubeInput({ [bestStat.probabilityField]: amount }),
         cubeType: primeLines > 0 ? "black" : "red" as RecommendationCubeType,
-        label: lineMixLabel(primeLines, nonPrimeLines, `${amount}% main stat`),
+        label: lineMixLabel(primeLines, nonPrimeLines, `${amount}% ${bestStat.label}`),
         description: `${primeLines} prime line(s), ${nonPrimeLines} non-prime line(s) at ${title(tier)}`,
       };
     })
@@ -525,14 +510,15 @@ function statBenchmarks(tier: CubeTier, itemLevel: number, mainStat: MainStat, e
     .sort((left, right) => left.value - right.value);
 }
 
-function gloveBenchmarks(tier: CubeTier, itemLevel: number, mainStat: MainStat, equivalencies: Map<string, number>) {
+function gloveBenchmarks(tier: CubeTier, itemLevel: number, profile: ClassStatProfile, equivalencies: Map<string, number>) {
   if (tier !== "legendary") return [];
 
   const critDamageWeight = equivalencies.get("Critical Dmg") ?? 0;
   const critDamageLine = 8;
   const primeStat = primeLineValue(itemLevel, tier);
   const nonPrimeStat = Math.max(1, primeStat - 3);
-  const statWeight = equivalencies.get(`${mainStat}%`) ?? equivalencies.get("All Stat%") ?? 0;
+  const bestStat = bestPotentialStat(profile, equivalencies);
+  const statWeight = bestStat.weight;
   const possibleLines = [
     { label: "Crit Damage", value: critDamageLine * critDamageWeight, difficulty: critDamageLine, detail: `${critDamageLine}% Crit Damage` },
     { label: "Prime main stat", value: primeStat * statWeight, difficulty: primeStat, detail: `${primeStat}% main stat` },
@@ -565,7 +551,7 @@ function gloveBenchmarks(tier: CubeTier, itemLevel: number, mainStat: MainStat, 
       return {
         value: combination.reduce((sum, line) => sum + line.value, 0),
         difficulty: combination.reduce((sum, line) => sum + line.difficulty, 0),
-        probabilityInput: cubeInput({ lineCritDamage: critLines, ...(statPercent ? { percStat: statPercent } : {}) }),
+        probabilityInput: cubeInput({ lineCritDamage: critLines, ...(statPercent ? { [bestStat.probabilityField]: statPercent } : {}) }),
         cubeType: "black" as RecommendationCubeType,
         label: `${details} (${critLines * critDamageLine}% Crit Damage${statPercent ? `, ${statPercent}% main stat` : ""})`,
         description: combination.map((line) => line.detail).join(", "),
@@ -574,6 +560,18 @@ function gloveBenchmarks(tier: CubeTier, itemLevel: number, mainStat: MainStat, 
   ]
     .filter(uniqueBenchmark)
     .sort((left, right) => left.value - right.value);
+}
+
+function bestPotentialStat(profile: ClassStatProfile, equivalencies: Map<string, number>) {
+  const candidates: Array<{ label: string; weight: number; probabilityField: "percStat" | "percAllStat" | "percHp" }> = [
+    ...[...profile.primaryStats, ...profile.secondaryStats].map((stat) => ({
+      label: `${stat}%`,
+      weight: equivalencies.get(`${stat}%`) ?? 0,
+      probabilityField: stat === "Max HP" ? "percHp" as const : "percStat" as const,
+    })),
+    { label: "All Stat%", weight: equivalencies.get("All Stat%") ?? 0, probabilityField: "percAllStat" },
+  ];
+  return candidates.reduce((best, candidate) => candidate.weight > best.weight ? candidate : best);
 }
 
 function offensiveBenchmarks(slot: EquipmentSlot, tier: CubeTier, itemLevel: number, equivalencies: Map<string, number>) {
@@ -617,8 +615,8 @@ function offensiveLineOptions(slot: EquipmentSlot, tier: CubeTier, itemLevel: nu
       );
     }
     options.push(
-      lineOption("IED", "lineIed", true, tier === "legendary" ? 40 : 30, equivalencies.get("IED") ?? 0, 1.15),
-      lineOption("IED", "lineIed", false, tier === "legendary" ? 30 : 15, equivalencies.get("IED") ?? 0, 1.15),
+      lineOption("IED", "lineIed", true, tier === "legendary" ? 40 : 30, iedWeight(equivalencies), 1.15),
+      lineOption("IED", "lineIed", false, tier === "legendary" ? 30 : 15, iedWeight(equivalencies), 1.15),
     );
   }
 
@@ -1006,6 +1004,7 @@ function normalizeLabel(value: string) {
   if (compact.includes("critical")) return "Critical Dmg";
   if (compact.includes("ignore") || compact.includes("ied")) return "IED";
   if (compact.includes("allstat")) return "All Stat%";
+  if (compact.includes("maxhp") || compact === "hp") return compact.includes("%") ? "Max HP%" : "Max HP";
   if (compact.includes("str%")) return "STR%";
   if (compact.includes("dex%")) return "DEX%";
   if (compact.includes("int%")) return "INT%";
@@ -1017,6 +1016,10 @@ function normalizeLabel(value: string) {
   if (compact.includes("attack%")) return "Attack%";
   if (compact.includes("attack")) return "Attack";
   return value.trim();
+}
+
+function iedWeight(equivalencies: Map<string, number>) {
+  return equivalencies.get("IED (380)") ?? equivalencies.get("IED (300)") ?? equivalencies.get("IED") ?? 0;
 }
 
 function title(value: string) {

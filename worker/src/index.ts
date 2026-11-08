@@ -59,10 +59,10 @@ app.use("/api/v1/profiles/*", requireAuth, requireCsrf);
 app.get("/api/v1/profiles", async (c) => {
   const rows = await c.env.DB.prepare(`
     SELECT id, name, world, job, region, weekly_rank, weekly_experience, image_url, source_url,
-      retrieved_at, created_at, updated_at
+      retrieved_at, stat_equivalencies, created_at, updated_at
     FROM character_profiles WHERE app_user_id = ? ORDER BY updated_at DESC
   `).bind(currentUser(c).id).all<Record<string, unknown>>();
-  return c.json(rows.results.map(camelRow));
+  return c.json(rows.results.map(publicProfile));
 });
 
 app.post("/api/v1/profiles/import", async (c) => {
@@ -91,6 +91,32 @@ app.post("/api/v1/profiles/import", async (c) => {
     id = Number(result.meta.last_row_id);
   }
   return c.json(await profileById(c.env.DB, id, userId), 201);
+});
+
+app.put("/api/v1/profiles/:id/stat-equivalencies", async (c) => {
+  const id = pathId(c.req.param("id"));
+  const userId = currentUser(c).id;
+  await profileById(c.env.DB, id, userId);
+  const body = asObject(await c.req.json());
+  if (!Array.isArray(body.equivalencies)) throw new HttpError(400, "equivalencies must be an array.");
+  if (body.equivalencies.length > 32) throw new HttpError(400, "equivalencies cannot contain more than 32 entries.");
+  const labels = new Set<string>();
+  const equivalencies = body.equivalencies.map((value, index) => {
+    const entry = asObject(value);
+    const stat = stringValue(entry.stat, `equivalencies[${index}].stat`, 40, true)!;
+    const quantity = Number(entry.quantity);
+    const finalDamagePercent = Number(entry.finalDamagePercent);
+    const normalizedStat = stat.trim().toLowerCase();
+    if (labels.has(normalizedStat)) throw new HttpError(400, `equivalencies[${index}].stat must be unique.`);
+    labels.add(normalizedStat);
+    if (!Number.isFinite(quantity) || quantity < 0 || quantity > 1_000_000 || !Number.isFinite(finalDamagePercent) || finalDamagePercent < 0 || finalDamagePercent > 10_000) {
+      throw new HttpError(400, `equivalencies[${index}] contains an out-of-range numeric value.`);
+    }
+    return { stat, quantity, finalDamagePercent };
+  });
+  await c.env.DB.prepare("UPDATE character_profiles SET stat_equivalencies=?, updated_at=? WHERE id=? AND app_user_id=?")
+    .bind(JSON.stringify(equivalencies), new Date().toISOString(), id, userId).run();
+  return c.json(await profileById(c.env.DB, id, userId));
 });
 
 app.get("/api/v1/profiles/:id", async (c) => c.json(await profileById(c.env.DB, pathId(c.req.param("id")), currentUser(c).id)));
@@ -415,10 +441,25 @@ function standardStarForceLimit(level: number | null) {
 
 async function profileById(db: D1Database, id: number, userId: number) {
   const row = await db.prepare(`SELECT id,name,world,job,region,weekly_rank,weekly_experience,image_url,source_url,
-    retrieved_at,created_at,updated_at FROM character_profiles WHERE id=? AND app_user_id=?`)
+    retrieved_at,stat_equivalencies,created_at,updated_at FROM character_profiles WHERE id=? AND app_user_id=?`)
     .bind(id, userId).first<Record<string, unknown>>();
   if (!row) throw new HttpError(404, "Character profile was not found.");
-  return camelRow(row);
+  return publicProfile(row);
+}
+
+function publicProfile(row: Record<string, unknown>) {
+  const result = camelRow(row);
+  if (typeof result.statEquivalencies !== "string") {
+    result.statEquivalencies = [];
+    return result;
+  }
+  try {
+    const parsed = JSON.parse(result.statEquivalencies);
+    result.statEquivalencies = Array.isArray(parsed) ? parsed : [];
+  } catch {
+    result.statEquivalencies = [];
+  }
+  return result;
 }
 
 function publicEquipment(row: Record<string, unknown>) {

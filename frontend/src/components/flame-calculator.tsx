@@ -31,7 +31,7 @@ export function FlameCalculator() {
       flameAdvantaged: equipType === "flameAdvantaged",
       baseAttack,
       magicAttack: false,
-      weights: { stats: { STR: statWeight }, allStat: allStatWeight, attack: attackWeight, bossDamage: 0, damage: 0 },
+      weights: { stats: { STR: statWeight }, maxHp: 0, allStat: allStatWeight, attack: attackWeight, bossDamage: 0, damage: 0 },
     }, targetScore);
     return {
       weights,

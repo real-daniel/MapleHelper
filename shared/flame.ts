@@ -3,6 +3,7 @@ export type FlameEquipmentKind = "armor" | "weapon";
 
 export type FlameWeights = {
   stats: Partial<Record<FlameMainStat, number>>;
+  maxHp: number;
   allStat: number;
   attack: number;
   bossDamage: number;
@@ -152,7 +153,7 @@ function flameCategoryScores(input: MesoFlameInput): number[][] {
   for (const [first, second] of STAT_PAIRS) {
     categories.push(scoreByTier((tier) => mixedFlameStat(input.level, tier) * ((input.weights.stats[first] ?? 0) + (input.weights.stats[second] ?? 0))));
   }
-  categories.push(scoreByTier(() => 0)); // Max HP
+  categories.push(scoreByTier((tier) => flameHpMp(input.level, tier) * input.weights.maxHp)); // Max HP
   categories.push(scoreByTier(() => 0)); // Max MP
   categories.push(scoreByTier(() => 0)); // Reduced level requirement
   categories.push(scoreByTier(() => 0)); // Defense

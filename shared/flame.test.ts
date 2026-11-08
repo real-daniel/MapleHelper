@@ -7,7 +7,7 @@ const input: MesoFlameInput = {
   flameAdvantaged: true,
   baseAttack: 0,
   magicAttack: false,
-  weights: { stats: {}, allStat: 1, attack: 0, bossDamage: 0, damage: 0 },
+  weights: { stats: {}, maxHp: 0, allStat: 1, attack: 0, bossDamage: 0, damage: 0 },
 };
 
 describe("GMS v271 meso flame model", () => {
@@ -31,5 +31,11 @@ describe("GMS v271 meso flame model", () => {
     expect(analysis.betterChance).toBeGreaterThan(0);
     expect(analysis.expectedCost).toBeCloseTo(analysis.expectedResets * MESO_FLAME_RESET_COST, 5);
     expect(analysis.expectedGain).toBeGreaterThan(0);
+  });
+
+  it("values Max HP flame lines when the character has an HP equivalency", () => {
+    const withoutHp = mesoFlameScoreDistribution(input);
+    const withHp = mesoFlameScoreDistribution({ ...input, weights: { ...input.weights, maxHp: 0.001 } });
+    expect(Math.max(...withHp.keys())).toBeGreaterThan(Math.max(...withoutHp.keys()));
   });
 });

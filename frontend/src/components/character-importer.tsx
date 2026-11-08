@@ -8,6 +8,7 @@ import { AccountBossIncome } from "@/components/account-boss-income";
 import { StatEquivalencyOcr } from "@/components/stat-equivalency-ocr";
 import { EquipmentManager, normalizeEquipmentItem, type EquipmentItem } from "@/components/equipment-manager";
 import { apiFetch } from "@/lib/api";
+import type { CharacterStatEquivalency } from "@/components/stat-equivalencies";
 
 type Region = "NORTH_AMERICA" | "EUROPE";
 
@@ -25,6 +26,7 @@ type ImportedCharacter = {
 
 type CharacterProfile = ImportedCharacter & {
   id: number;
+  statEquivalencies: CharacterStatEquivalency[];
   createdAt: string;
   updatedAt: string;
 };
@@ -219,9 +221,9 @@ export function CharacterImporter() {
             <EquipmentManager profileId={selectedProfile.id} characterName={selectedProfile.name} characterJob={selectedProfile.job} characterImageUrl={selectedProfile.imageUrl} equipment={equipment} activePreset={activeEquipmentPreset} onPresetChange={setActiveEquipmentPreset} onChange={setEquipment} onMessage={setMessage} />
           )}
 
-          {characterView === "upgrades" && <UpgradeRecommendations key={selectedProfile.id} equipment={equipment.filter((item) => (item.presetNumber ?? 1) === activeEquipmentPreset)} selectedProfileId={selectedProfileId} characterJob={selectedProfile.job} />}
+          {characterView === "upgrades" && <UpgradeRecommendations key={selectedProfile.id} equipment={equipment.filter((item) => (item.presetNumber ?? 1) === activeEquipmentPreset)} selectedProfileId={selectedProfileId} characterJob={selectedProfile.job} statEquivalencies={selectedProfile.statEquivalencies ?? []} />}
 
-          {characterView === "stats" && <StatEquivalencyOcr key={selectedProfile.id} characterName={selectedProfile.name} />}
+          {characterView === "stats" && <StatEquivalencyOcr key={`${selectedProfile.id}-${selectedProfile.job}`} profileId={selectedProfile.id} characterName={selectedProfile.name} characterJob={selectedProfile.job} initialEquivalencies={selectedProfile.statEquivalencies ?? []} onSaved={(statEquivalencies) => setProfiles((current) => current.map((profile) => profile.id === selectedProfile.id ? { ...profile, statEquivalencies } : profile))} />}
 
           {characterView === "bosses" && <BossTracker key={selectedProfile.id} profileId={selectedProfile.id} characterName={selectedProfile.name} onPlanChange={() => setBossIncomeRevision((revision) => revision + 1)} />}
 

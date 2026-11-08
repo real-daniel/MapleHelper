@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_STAR_FORCE_SETTINGS } from "./star-force-settings";
 import type { EquipmentItem } from "./equipment-manager";
-import { buildRecommendations, mainStatForJob, recommendationsForCategory } from "./upgrade-recommendations";
+import { buildRecommendations, mainStatForJob, potentialDamageForJob, recommendationsForCategory } from "./upgrade-recommendations";
 
 const equivalencies = new Map([
   ["STR", 0.01], ["DEX", 0.01], ["INT", 0.01], ["LUK", 0.01],
@@ -91,5 +91,34 @@ describe("preliminary upgrade recommendations", () => {
     expect(flames.every((recommendation) => recommendation.kind === "Flaming")).toBe(true);
     expect(stars.every((recommendation) => recommendation.kind === "Star Force")).toBe(true);
     expect(recommendationsForCategory(recommendations, "All")).toEqual(recommendations);
+  });
+
+  it("adds each class-specific stat weight independently to Star Force FD", () => {
+    const weights = new Map(equivalencies);
+    weights.set("LUK", 0.01);
+    weights.set("DEX", 0.02);
+    weights.set("STR", 0.04);
+    const dualBlade = buildRecommendations([item({ id: 8, starForce: 20 })], "LUK", weights, DEFAULT_STAR_FORCE_SETTINGS, "Dual Blade")
+      .find((recommendation) => recommendation.kind === "Star Force");
+    const nightLord = buildRecommendations([item({ id: 9, starForce: 20 })], "LUK", weights, DEFAULT_STAR_FORCE_SETTINGS, "Night Lord")
+      .find((recommendation) => recommendation.kind === "Star Force");
+    expect(dualBlade?.notes).toContain("STR");
+    expect(dualBlade!.damageGain).toBeGreaterThan(nightLord!.damageGain);
+  });
+
+  it("values flat and percentage potential lines on every equipment category", () => {
+    const weights = new Map([
+      ["LUK", 0.01], ["DEX", 0.02], ["STR", 0.04], ["Attack", 0.1],
+      ["LUK%", 0.2], ["DEX%", 0.3], ["STR%", 0.4], ["All Stat%", 0.8], ["Attack%", 1],
+    ]);
+    const lines = "LUK +12%\nDEX +10%\nSTR +7%\nAll Stats +6%\nAttack Power +12";
+    const expected = 12 * 0.2 + 10 * 0.3 + 7 * 0.4 + 6 * 0.8 + 12 * 0.1;
+    expect(potentialDamageForJob(lines, "Dual Blade", weights)).toBeCloseTo(expected);
+  });
+
+  it("does not treat flat All Stats as Max HP for Demon Avenger", () => {
+    const weights = new Map([["Max HP", 0.5], ["STR", 0.01], ["All Stat%", 0.2]]);
+    expect(potentialDamageForJob("All Stats +10", "Demon Avenger", weights)).toBeCloseTo(0.1);
+    expect(potentialDamageForJob("All Stats +10%", "Demon Avenger", weights)).toBeCloseTo(2);
   });
 });

@@ -42,7 +42,7 @@ describe("saved boss presets and account API", () => {
   beforeEach(async () => {
     database = new DatabaseSync(":memory:");
     database.exec("PRAGMA foreign_keys=ON");
-    for (const file of ["0001_initial.sql", "0004_boss_tracker.sql", "0005_boss_presets.sql"]) {
+    for (const file of ["0001_initial.sql", "0004_boss_tracker.sql", "0005_boss_presets.sql", "0019_character_stat_equivalencies.sql"]) {
       database.exec(readFileSync(new URL(`../../migrations/${file}`, import.meta.url), "utf8"));
     }
     for (const id of [1, 2]) {
@@ -74,6 +74,38 @@ describe("saved boss presets and account API", () => {
     expect(response.status).toBe(201);
     return response.json();
   }
+
+  it("persists character stat equivalencies and isolates them by account", async () => {
+    const response = await app.request("/api/v1/profiles/1/stat-equivalencies", {
+      method: "PUT",
+      headers: { Cookie: "MAPLEHELPER_SESSION=session-1; MAPLEHELPER_CSRF=test", "X-XSRF-TOKEN": "test", "Content-Type": "application/json" },
+      body: JSON.stringify({ equivalencies: [{ stat: "STR", quantity: 30, finalDamagePercent: 0.235 }] }),
+    }, env);
+    expect(response.status).toBe(200);
+    expect((await response.json()).statEquivalencies).toEqual([{ stat: "STR", quantity: 30, finalDamagePercent: 0.235 }]);
+
+    const otherAccount = await app.request("/api/v1/profiles/1/stat-equivalencies", {
+      method: "PUT",
+      headers: { Cookie: "MAPLEHELPER_SESSION=session-2; MAPLEHELPER_CSRF=test", "X-XSRF-TOKEN": "test", "Content-Type": "application/json" },
+      body: JSON.stringify({ equivalencies: [] }),
+    }, env);
+    expect(otherAccount.status).toBe(404);
+  });
+
+  it("rejects duplicate or unbounded character stat equivalencies", async () => {
+    const headers = { Cookie: "MAPLEHELPER_SESSION=session-1; MAPLEHELPER_CSRF=test", "X-XSRF-TOKEN": "test", "Content-Type": "application/json" };
+    const duplicate = await app.request("/api/v1/profiles/1/stat-equivalencies", {
+      method: "PUT", headers,
+      body: JSON.stringify({ equivalencies: [{ stat: "STR", quantity: 30, finalDamagePercent: 1 }, { stat: "str", quantity: 40, finalDamagePercent: 2 }] }),
+    }, env);
+    expect(duplicate.status).toBe(400);
+
+    const oversized = await app.request("/api/v1/profiles/1/stat-equivalencies", {
+      method: "PUT", headers,
+      body: JSON.stringify({ equivalencies: [{ stat: "STR", quantity: 1_000_001, finalDamagePercent: 1 }] }),
+    }, env);
+    expect(oversized.status).toBe(400);
+  });
 
   it("persists reusable settings, applies to another character, and isolates accounts", async () => {
     const preset = await savePreset();
