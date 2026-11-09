@@ -365,7 +365,7 @@ function flameRecommendation(item: EquipmentItem, profile: ClassStatProfile, equ
     allStat: equivalencies.get("All Stat%") ?? 0,
     attack: equivalencies.get("Attack") ?? 0,
     bossDamage: equivalencies.get("Boss Damage") ?? 0,
-    damage: equivalencies.get("Damage") ?? 0,
+    damage: equivalencies.get("Boss Damage") ?? 0,
   };
   if (Object.values(weights.stats).every((weight) => !weight) && !weights.maxHp && !weights.allStat && !weights.attack && !weights.bossDamage && !weights.damage) return null;
 
@@ -403,7 +403,6 @@ function currentFlameDamage(lines: string, equivalencies: Map<string, number>) {
     else if (label === "All Stat%") total += value * (equivalencies.get("All Stat%") ?? 0);
     else if (label === "Attack") total += value * (equivalencies.get("Attack") ?? 0);
     else if (label === "Boss Damage") total += value * (equivalencies.get("Boss Damage") ?? 0);
-    else if (label === "Damage") total += value * (equivalencies.get("Damage") ?? 0);
   }
   return total;
 }
@@ -1000,7 +999,7 @@ function parseTier(value: string): CubeTier {
 function normalizeLabel(value: string) {
   const compact = value.toLowerCase().replace(/[^a-z%]/g, "");
   if (compact.includes("boss")) return "Boss Damage";
-  if (compact === "damage" || compact === "damage%") return "Damage";
+  if (compact === "damage" || compact === "damage%") return "Boss Damage";
   if (compact.includes("critical")) return "Critical Dmg";
   if (compact.includes("ignore") || compact.includes("ied")) return "IED";
   if (compact.includes("allstat")) return "All Stat%";

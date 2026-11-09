@@ -16,4 +16,12 @@ describe("character stat equivalencies", () => {
     expect(values.get("DEX")).toBeCloseTo(0.01);
     expect(values.get("STR")).toBeCloseTo(0.005);
   });
+
+  it("uses one boss-damage equivalency for Damage and Boss Damage", () => {
+    expect(equivalencyFieldsForJob("Adele")).toContain("Boss Damage");
+    expect(equivalencyFieldsForJob("Adele")).not.toContain("Damage");
+    const values = equivalencyMap([{ stat: "Damage", quantity: 40, finalDamagePercent: 4 }]);
+    expect(values.get("Boss Damage")).toBeCloseTo(0.1);
+    expect(values.has("Damage")).toBe(false);
+  });
 });

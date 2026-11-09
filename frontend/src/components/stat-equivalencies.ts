@@ -16,7 +16,6 @@ export function equivalencyFieldsForJob(jobName: string) {
     profile.attackStat,
     `${profile.attackStat}%`,
     "Boss Damage",
-    "Damage",
     "Critical Dmg",
     "IED (300)",
     "IED (380)",
@@ -40,7 +39,7 @@ export function normalizeEquivalencyLabel(value: string) {
     return "IED (380)";
   }
   if (compact.includes("boss")) return "Boss Damage";
-  if (compact === "damage" || compact === "damage%") return "Damage";
+  if (compact === "damage" || compact === "damage%") return "Boss Damage";
   if (compact.includes("critical")) return "Critical Dmg";
   if (compact.includes("allstat")) return "All Stat%";
   if (compact.includes("maxhp%") || compact === "hp%") return "Max HP%";

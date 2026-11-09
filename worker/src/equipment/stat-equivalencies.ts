@@ -9,7 +9,7 @@ const STAT_ALIASES: Record<string, string> = {
   ANSTAT: "All Stat%", "ANSTAT%": "All Stat%", ATTACKS: "Attack%", "ATTACK%S": "Attack%",
   ATT: "Attack", "ATT%": "Attack%", ATTACK: "Attack", "ATTACK%": "Attack%", ATTACKPOWER: "Attack",
   "ATTACKPOWER%": "Attack%", MAGICATTACK: "Attack", "MAGICATTACK%": "Attack%", MATK: "Attack", "MATK%": "Attack%",
-  BOSSDAMAGE: "Boss Damage", "BOSSDAMAGE%": "Boss Damage", DAMAGE: "Damage", "DAMAGE%": "Damage",
+  BOSSDAMAGE: "Boss Damage", "BOSSDAMAGE%": "Boss Damage", DAMAGE: "Boss Damage", "DAMAGE%": "Boss Damage",
   CRITICALDMG: "Critical Dmg", CRITICALDAMAGE: "Critical Dmg", "CRITICALDAMAGE%": "Critical Dmg",
   DEX: "DEX", "DEX%": "DEX%", IGNOREDFF300: "Ignore Def(300)", IGNOREDFF380: "Ignore Def(380)",
   IGNOREDEF300: "Ignore Def(300)", IGNOREDEF380: "Ignore Def(380)", IED300: "Ignore Def(300)", IED380: "Ignore Def(380)",

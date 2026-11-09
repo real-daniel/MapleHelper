@@ -195,6 +195,7 @@ describe("remaining service parity helpers", () => {
       "Magic Attack% | 12 | 4.827%",
       "IED (380) 40 1.361%",
       "Attack | +30 | +0.606%",
+      "Damage | 40 | 3.628%",
     ].join("\n"));
     expect(values).toEqual([
       { stat: "INT", quantity: 30, finalDamagePercent: 0.235 },
@@ -203,6 +204,7 @@ describe("remaining service parity helpers", () => {
       { stat: "Attack%", quantity: 12, finalDamagePercent: 4.827 },
       { stat: "Ignore Def(380)", quantity: 40, finalDamagePercent: 1.361 },
       { stat: "Attack", quantity: 30, finalDamagePercent: 0.606 },
+      { stat: "Boss Damage", quantity: 40, finalDamagePercent: 3.628 },
     ]);
   });
 
