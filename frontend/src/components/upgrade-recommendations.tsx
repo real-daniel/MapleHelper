@@ -479,34 +479,16 @@ function potentialBenchmarks(
 }
 
 function statBenchmarks(tier: CubeTier, itemLevel: number, profile: ClassStatProfile, equivalencies: Map<string, number>) {
-  const prime = primeLineValue(itemLevel, tier);
-  const nonPrime = Math.max(1, prime - 3);
-  const bestStat = bestPotentialStat(profile, equivalencies);
-  const statWeight = bestStat.weight;
-  const combinations = [
-    { primeLines: 0, nonPrimeLines: 2 },
-    { primeLines: 1, nonPrimeLines: 1 },
-    { primeLines: 2, nonPrimeLines: 0 },
-    { primeLines: 0, nonPrimeLines: 3 },
-    { primeLines: 1, nonPrimeLines: 2 },
-    { primeLines: 2, nonPrimeLines: 1 },
-    { primeLines: 3, nonPrimeLines: 0 },
-  ];
-
-  return combinations
-    .map(({ primeLines, nonPrimeLines }) => {
-      const amount = primeLines * prime + nonPrimeLines * nonPrime;
-      return {
-        value: amount * statWeight,
-        difficulty: amount,
-        probabilityInput: cubeInput({ [bestStat.probabilityField]: amount }),
-        cubeType: primeLines > 0 ? "black" : "red" as RecommendationCubeType,
-        label: lineMixLabel(primeLines, nonPrimeLines, `${amount}% ${bestStat.label}`),
-        description: `${primeLines} prime line(s), ${nonPrimeLines} non-prime line(s) at ${title(tier)}`,
-      };
-    })
-    .filter(uniqueBenchmark)
-    .sort((left, right) => left.value - right.value);
+  const bestStat = bestPotentialStat(profile, equivalencies, itemLevel, tier);
+  const amount = 3 * bestStat.primeValue;
+  return [{
+    value: amount * bestStat.weight,
+    difficulty: amount,
+    probabilityInput: cubeInput({ [bestStat.probabilityField]: amount }),
+    cubeType: "black" as RecommendationCubeType,
+    label: `3 prime lines (${amount}% ${bestStat.label})`,
+    description: `3 prime ${bestStat.label} lines at ${title(tier)}`,
+  }];
 }
 
 function gloveBenchmarks(tier: CubeTier, itemLevel: number, profile: ClassStatProfile, equivalencies: Map<string, number>) {
@@ -514,9 +496,9 @@ function gloveBenchmarks(tier: CubeTier, itemLevel: number, profile: ClassStatPr
 
   const critDamageWeight = equivalencies.get("Critical Dmg") ?? 0;
   const critDamageLine = 8;
-  const primeStat = primeLineValue(itemLevel, tier);
-  const nonPrimeStat = Math.max(1, primeStat - 3);
-  const bestStat = bestPotentialStat(profile, equivalencies);
+  const bestStat = bestPotentialStat(profile, equivalencies, itemLevel, tier);
+  const primeStat = bestStat.primeValue;
+  const nonPrimeStat = bestStat.nonPrimeValue;
   const statWeight = bestStat.weight;
   const possibleLines = [
     { label: "Crit Damage", value: critDamageLine * critDamageWeight, difficulty: critDamageLine, detail: `${critDamageLine}% Crit Damage` },
@@ -561,16 +543,22 @@ function gloveBenchmarks(tier: CubeTier, itemLevel: number, profile: ClassStatPr
     .sort((left, right) => left.value - right.value);
 }
 
-function bestPotentialStat(profile: ClassStatProfile, equivalencies: Map<string, number>) {
-  const candidates: Array<{ label: string; weight: number; probabilityField: "percStat" | "percAllStat" | "percHp" }> = [
+function bestPotentialStat(profile: ClassStatProfile, equivalencies: Map<string, number>, itemLevel: number, tier: CubeTier) {
+  const mainStatPrime = primeLineValue(itemLevel, tier);
+  const mainStatNonPrime = Math.max(1, mainStatPrime - 3);
+  const allStatPrime = Math.max(1, mainStatPrime - 3);
+  const allStatNonPrime = Math.max(1, allStatPrime - 3);
+  const candidates: Array<{ label: string; weight: number; primeValue: number; nonPrimeValue: number; probabilityField: "percStat" | "percAllStat" | "percHp" }> = [
     ...[...profile.primaryStats, ...profile.secondaryStats].map((stat) => ({
-      label: `${stat}%`,
+      label: stat,
       weight: equivalencies.get(`${stat}%`) ?? 0,
+      primeValue: mainStatPrime,
+      nonPrimeValue: mainStatNonPrime,
       probabilityField: stat === "Max HP" ? "percHp" as const : "percStat" as const,
     })),
-    { label: "All Stat%", weight: equivalencies.get("All Stat%") ?? 0, probabilityField: "percAllStat" },
+    { label: "All Stat", weight: equivalencies.get("All Stat%") ?? 0, primeValue: allStatPrime, nonPrimeValue: allStatNonPrime, probabilityField: "percAllStat" },
   ];
-  return candidates.reduce((best, candidate) => candidate.weight > best.weight ? candidate : best);
+  return candidates.reduce((best, candidate) => candidate.primeValue * candidate.weight > best.primeValue * best.weight ? candidate : best);
 }
 
 function offensiveBenchmarks(slot: EquipmentSlot, tier: CubeTier, itemLevel: number, equivalencies: Map<string, number>) {

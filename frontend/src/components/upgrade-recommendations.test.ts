@@ -121,4 +121,16 @@ describe("preliminary upgrade recommendations", () => {
     expect(potentialDamageForJob("All Stats +10", "Demon Avenger", weights)).toBeCloseTo(0.1);
     expect(potentialDamageForJob("All Stats +10%", "Demon Avenger", weights)).toBeCloseTo(2);
   });
+
+  it("targets three real prime main-stat lines instead of inflated All Stat lines", () => {
+    const weights = new Map(equivalencies);
+    weights.set("STR%", 0.1);
+    weights.set("All Stat%", 0.11);
+    const recommendation = buildRecommendations([
+      item({ id: 10, starForce: 30, potentialLines: "STR +13%\nSTR +10%\nSTR +10%" }),
+    ], "STR", weights, DEFAULT_STAR_FORCE_SETTINGS, "Adele")
+      .find((candidate) => candidate.kind === "Cubing");
+    expect(recommendation?.action).toContain("3 prime lines (39% STR)");
+    expect(recommendation?.notes).toContain("3 prime STR lines");
+  });
 });
