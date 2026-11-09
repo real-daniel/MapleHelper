@@ -6,6 +6,7 @@ export type ClassStatProfile = {
   primaryStats: CharacterDamageStat[];
   secondaryStats: CharacterDamageStat[];
   attackStat: "Attack" | "Magic Attack";
+  usesAllStatPotential: boolean;
 };
 
 const STR_DEX: ClassStatProfile = profile(["STR"], ["DEX"]);
@@ -14,7 +15,7 @@ const INT_LUK: ClassStatProfile = profile(["INT"], ["LUK"], "Magic Attack");
 const LUK_DEX: ClassStatProfile = profile(["LUK"], ["DEX"]);
 const LUK_DEX_STR: ClassStatProfile = profile(["LUK"], ["DEX", "STR"]);
 const DEMON_AVENGER: ClassStatProfile = profile(["Max HP"], ["STR"]);
-const XENON: ClassStatProfile = profile(["STR", "DEX", "LUK"], []);
+const XENON: ClassStatProfile = profile(["STR", "DEX", "LUK"], [], "Attack", true);
 
 const EXACT_PROFILES: Array<[string[], ClassStatProfile]> = [
   [["demon avenger"], DEMON_AVENGER],
@@ -42,6 +43,7 @@ function profile(
   primaryStats: CharacterDamageStat[],
   secondaryStats: CharacterDamageStat[],
   attackStat: ClassStatProfile["attackStat"] = "Attack",
+  usesAllStatPotential = false,
 ): ClassStatProfile {
-  return { primaryStats, secondaryStats, attackStat };
+  return { primaryStats, secondaryStats, attackStat, usesAllStatPotential };
 }

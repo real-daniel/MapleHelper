@@ -19,7 +19,7 @@ describe("class stat profiles", () => {
   });
 
   it("handles Demon Avenger and Xenon explicitly", () => {
-    expect(classStatProfile("Demon Avenger")).toMatchObject({ primaryStats: ["Max HP"], secondaryStats: ["STR"] });
-    expect(classStatProfile("Xenon")).toMatchObject({ primaryStats: ["STR", "DEX", "LUK"], secondaryStats: [] });
+    expect(classStatProfile("Demon Avenger")).toMatchObject({ primaryStats: ["Max HP"], secondaryStats: ["STR"], usesAllStatPotential: false });
+    expect(classStatProfile("Xenon")).toMatchObject({ primaryStats: ["STR", "DEX", "LUK"], secondaryStats: [], usesAllStatPotential: true });
   });
 });

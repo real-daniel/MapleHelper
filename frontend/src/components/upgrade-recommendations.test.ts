@@ -144,4 +144,21 @@ describe("preliminary upgrade recommendations", () => {
       .find((candidate) => candidate.kind === "Cubing");
     expect(recommendation?.action).toContain("1 prime + 2 non-prime (33% STR)");
   });
+
+  it("only generates All Stat cubing targets for Xenon", () => {
+    const weights = new Map(equivalencies);
+    weights.set("STR%", 0.1);
+    weights.set("DEX%", 0.1);
+    weights.set("LUK%", 0.1);
+    weights.set("All Stat%", 0.5);
+    const adele = buildRecommendations([
+      item({ id: 12, starForce: 30, potentialLines: "STR +13%\nSTR +10%\nSTR +10%" }),
+    ], "STR", weights, DEFAULT_STAR_FORCE_SETTINGS, "Adele").find((candidate) => candidate.kind === "Cubing");
+    const xenon = buildRecommendations([
+      item({ id: 13, starForce: 30, potentialLines: "STR +13%\nSTR +10%\nSTR +10%" }),
+    ], "STR", weights, DEFAULT_STAR_FORCE_SETTINGS, "Xenon").find((candidate) => candidate.kind === "Cubing");
+    expect(adele?.action).toContain("STR");
+    expect(adele?.action).not.toContain("All Stat");
+    expect(xenon?.action).toContain("All Stat");
+  });
 });

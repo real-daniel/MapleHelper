@@ -568,7 +568,7 @@ function bestPotentialStat(profile: ClassStatProfile, equivalencies: Map<string,
       nonPrimeValue: mainStatNonPrime,
       probabilityField: stat === "Max HP" ? "percHp" as const : "percStat" as const,
     })),
-    { label: "All Stat", weight: equivalencies.get("All Stat%") ?? 0, primeValue: allStatPrime, nonPrimeValue: allStatNonPrime, probabilityField: "percAllStat" },
+    ...(profile.usesAllStatPotential ? [{ label: "All Stat", weight: equivalencies.get("All Stat%") ?? 0, primeValue: allStatPrime, nonPrimeValue: allStatNonPrime, probabilityField: "percAllStat" as const }] : []),
   ];
   return candidates.reduce((best, candidate) => candidate.primeValue * candidate.weight > best.primeValue * best.weight ? candidate : best);
 }
