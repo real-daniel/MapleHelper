@@ -456,7 +456,7 @@ function selectCubingTarget(
   for (let index = CUBE_TIER_ORDER.indexOf(currentTier); index < CUBE_TIER_ORDER.length; index++) {
     const tier = CUBE_TIER_ORDER[index];
     const target = potentialBenchmarks(item.slot, tier, itemLevel, profile, equivalencies)
-      .find((benchmark) => benchmark.value > currentDamage);
+      .find((benchmark) => benchmark.value > currentDamage + 1e-9);
     if (target) return { target, targetTier: tier };
   }
 
@@ -480,15 +480,27 @@ function potentialBenchmarks(
 
 function statBenchmarks(tier: CubeTier, itemLevel: number, profile: ClassStatProfile, equivalencies: Map<string, number>) {
   const bestStat = bestPotentialStat(profile, equivalencies, itemLevel, tier);
-  const amount = 3 * bestStat.primeValue;
-  return [{
-    value: amount * bestStat.weight,
-    difficulty: amount,
-    probabilityInput: cubeInput({ [bestStat.probabilityField]: amount }),
-    cubeType: "black" as RecommendationCubeType,
-    label: `3 prime lines (${amount}% ${bestStat.label})`,
-    description: `3 prime ${bestStat.label} lines at ${title(tier)}`,
-  }];
+  const combinations = [
+    { primeLines: 0, nonPrimeLines: 2 },
+    { primeLines: 1, nonPrimeLines: 1 },
+    { primeLines: 2, nonPrimeLines: 0 },
+    { primeLines: 0, nonPrimeLines: 3 },
+    { primeLines: 1, nonPrimeLines: 2 },
+    { primeLines: 2, nonPrimeLines: 1 },
+    { primeLines: 3, nonPrimeLines: 0 },
+  ];
+
+  return combinations.map(({ primeLines, nonPrimeLines }) => {
+    const amount = primeLines * bestStat.primeValue + nonPrimeLines * bestStat.nonPrimeValue;
+    return {
+      value: amount * bestStat.weight,
+      difficulty: amount,
+      probabilityInput: cubeInput({ [bestStat.probabilityField]: amount }),
+      cubeType: primeLines > 0 ? "black" as RecommendationCubeType : "red" as RecommendationCubeType,
+      label: lineMixLabel(primeLines, nonPrimeLines, `${amount}% ${bestStat.label}`),
+      description: `${primeLines} prime line(s), ${nonPrimeLines} non-prime line(s) at ${title(tier)}`,
+    };
+  }).sort((left, right) => left.value - right.value);
 }
 
 function gloveBenchmarks(tier: CubeTier, itemLevel: number, profile: ClassStatProfile, equivalencies: Map<string, number>) {
