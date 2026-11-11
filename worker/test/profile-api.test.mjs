@@ -29,6 +29,7 @@ describe("character profile API", () => {
     database.exec("PRAGMA foreign_keys=ON");
     database.exec(readFileSync(new URL("../../migrations/0001_initial.sql", import.meta.url), "utf8"));
     database.exec(readFileSync(new URL("../../migrations/0019_character_stat_equivalencies.sql", import.meta.url), "utf8"));
+    database.exec(readFileSync(new URL("../../migrations/0020_character_profile_order.sql", import.meta.url), "utf8"));
     database.prepare(`INSERT INTO app_users(id,discord_user_id,username,display_name,created_at,updated_at)
       VALUES (1,'discord-1','user-1','User 1','now','now')`).run();
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("session-1"));
@@ -81,5 +82,36 @@ describe("character profile API", () => {
       }),
       expect.objectContaining({ name: "UnavailableCharacter", world: "Old World", job: "Old Job", weeklyRank: 1, weeklyExperience: 2 }),
     ]));
+    expect(profiles.map((profile) => profile.id)).toEqual([1, 2]);
+  });
+
+  it("persists a complete character order", async () => {
+    const response = await app.request("/api/v1/profiles/order", {
+      method: "PUT",
+      headers: {
+        Cookie: "MAPLEHELPER_SESSION=session-1; MAPLEHELPER_CSRF=test",
+        "X-XSRF-TOKEN": "test",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ profileIds: [2, 1] }),
+    }, env);
+
+    expect(response.status).toBe(204);
+    const rows = database.prepare("SELECT id, sort_order FROM character_profiles WHERE app_user_id=1 ORDER BY sort_order").all();
+    expect(rows).toEqual([{ id: 2, sort_order: 0 }, { id: 1, sort_order: 1 }]);
+  });
+
+  it("rejects partial character orders", async () => {
+    const response = await app.request("/api/v1/profiles/order", {
+      method: "PUT",
+      headers: {
+        Cookie: "MAPLEHELPER_SESSION=session-1; MAPLEHELPER_CSRF=test",
+        "X-XSRF-TOKEN": "test",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ profileIds: [2] }),
+    }, env);
+
+    expect(response.status).toBe(400);
   });
 });

@@ -167,10 +167,11 @@ dd { margin: 0; }
 .character-workspace { max-width: 1200px; margin: 32px auto 64px; padding: 0 24px; }
 .workspace-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .workspace-heading h1 { margin: 0; }
-.character-roster { display: flex; gap: 8px; margin: 20px 0 24px; padding-bottom: 6px; overflow-x: auto; }
-.character-tile { display: flex; flex: 0 0 200px; min-height: 70px; align-items: center; gap: 10px; padding: 9px 11px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); text-align: left; }
+.character-roster { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0 24px; }
+.character-tile { display: flex; flex: 0 1 200px; min-height: 70px; align-items: center; gap: 10px; padding: 9px 11px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); text-align: left; cursor: grab; }
 .character-tile:hover { border-color: var(--border-strong); background: var(--surface-hover); }
 .character-tile[aria-pressed="true"] { border-color: var(--accent); }
+.character-tile.dragging { opacity: .45; cursor: grabbing; }
 .character-tile > span:last-child { display: grid; min-width: 0; gap: 2px; }
 .character-tile small { overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .character-portrait { display: grid; flex: 0 0 auto; width: 48px; height: 48px; place-items: center; overflow: hidden; border: 1px solid var(--border); border-radius: 5px; background: var(--surface-raised); color: var(--accent); font-size: 20px; font-weight: 650; }
@@ -337,7 +338,7 @@ dd { margin: 0; }
   .app-tabs button { flex: 1; justify-content: center; }
   .character-workspace { margin-top: 24px; padding: 0 14px; }
   .workspace-heading .primary-button { padding: 7px 10px; }
-  .character-tile { flex-basis: 180px; }
+  .character-tile { flex: 1 1 180px; }
   .character-hero { align-items: flex-start; padding: 16px; }
   .hero-portrait { width: 66px; height: 66px; }
   .character-identity h2 { font-size: 22px; }
@@ -365,7 +366,6 @@ dd { margin: 0; }
   .auth-card { padding: 28px 22px; }
   .app-tabs button { font-size: 12px; }
   .boss-summary { grid-template-columns: 1fr; }
-  .character-roster { margin-right: -14px; }
   dl { grid-template-columns: 1fr; }
 }
 

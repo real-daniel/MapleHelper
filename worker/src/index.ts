@@ -77,7 +77,7 @@ app.get("/api/v1/profiles", async (c) => {
   const rows = await c.env.DB.prepare(`
     SELECT id, name, world, job, region, weekly_rank, weekly_experience, image_url, source_url,
       retrieved_at, stat_equivalencies, created_at, updated_at
-    FROM character_profiles WHERE app_user_id = ? ORDER BY updated_at DESC
+    FROM character_profiles WHERE app_user_id = ? ORDER BY sort_order, id
   `).bind(userId).all<Record<string, unknown>>();
   return c.json(rows.results.map(publicProfile));
 });
@@ -100,11 +100,13 @@ app.post("/api/v1/profiles/import", async (c) => {
       .bind(imported.name, imported.world, imported.job, imported.weeklyRank, imported.weeklyExperience,
         imported.imageUrl, imported.sourceUrl, imported.retrievedAt, now, id, userId).run();
   } else {
+    const nextOrder = await c.env.DB.prepare("SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order FROM character_profiles WHERE app_user_id=?")
+      .bind(userId).first<{ next_order: number }>();
     const result = await c.env.DB.prepare(`INSERT INTO character_profiles
-      (app_user_id,name,world,job,region,weekly_rank,weekly_experience,image_url,source_url,retrieved_at,created_at,updated_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`)
+      (app_user_id,name,world,job,region,weekly_rank,weekly_experience,image_url,source_url,retrieved_at,created_at,updated_at,sort_order)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
       .bind(userId, imported.name, imported.world, imported.job, imported.region, imported.weeklyRank,
-        imported.weeklyExperience, imported.imageUrl, imported.sourceUrl, imported.retrievedAt, now, now).run();
+        imported.weeklyExperience, imported.imageUrl, imported.sourceUrl, imported.retrievedAt, now, now, nextOrder?.next_order ?? 0).run();
     id = Number(result.meta.last_row_id);
   }
   return c.json(await profileById(c.env.DB, id, userId), 201);
@@ -134,6 +136,33 @@ app.put("/api/v1/profiles/:id/stat-equivalencies", async (c) => {
   await c.env.DB.prepare("UPDATE character_profiles SET stat_equivalencies=?, updated_at=? WHERE id=? AND app_user_id=?")
     .bind(JSON.stringify(equivalencies), new Date().toISOString(), id, userId).run();
   return c.json(await profileById(c.env.DB, id, userId));
+});
+
+app.put("/api/v1/profiles/order", async (c) => {
+  const userId = currentUser(c).id;
+  const body = asObject(await c.req.json());
+  if (!Array.isArray(body.profileIds)) throw new HttpError(400, "profileIds must be an array.");
+  const profileIds = body.profileIds.map((value, index) => {
+    const id = integerValue(value, `profileIds[${index}]`, 1, Number.MAX_SAFE_INTEGER);
+    return id!;
+  });
+  if (new Set(profileIds).size !== profileIds.length) throw new HttpError(400, "profileIds must not contain duplicates.");
+
+  const owned = await c.env.DB.prepare("SELECT id FROM character_profiles WHERE app_user_id=? ORDER BY id")
+    .bind(userId).all<{ id: number }>();
+  const ownedIds = owned.results.map((profile) => profile.id);
+  if (profileIds.length !== ownedIds.length || profileIds.some((id) => !ownedIds.includes(id))) {
+    throw new HttpError(400, "profileIds must contain every saved character exactly once.");
+  }
+  if (profileIds.length === 0) return c.body(null, 204);
+
+  const cases = profileIds.map(() => "WHEN ? THEN ?").join(" ");
+  const placeholders = profileIds.map(() => "?").join(",");
+  const positions = profileIds.flatMap((id, index) => [id, index]);
+  await c.env.DB.prepare(`UPDATE character_profiles SET sort_order=CASE id ${cases} END
+    WHERE app_user_id=? AND id IN (${placeholders})`)
+    .bind(...positions, userId, ...profileIds).run();
+  return c.body(null, 204);
 });
 
 app.get("/api/v1/profiles/:id", async (c) => c.json(await profileById(c.env.DB, pathId(c.req.param("id")), currentUser(c).id)));

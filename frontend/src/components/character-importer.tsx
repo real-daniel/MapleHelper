@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { FormEvent, useEffect, useState } from "react";
+import { DragEvent, FormEvent, useEffect, useRef, useState } from "react";
 import { UpgradeRecommendations } from "@/components/upgrade-recommendations";
 import { BossTracker } from "@/components/boss-tracker";
 import { AccountBossIncome } from "@/components/account-boss-income";
@@ -43,6 +43,12 @@ export function CharacterImporter() {
   const [loading, setLoading] = useState(false);
   const [characterView, setCharacterView] = useState<"overview" | "equipment" | "stats" | "upgrades" | "bosses" | "manage">("overview");
   const [bossIncomeRevision, setBossIncomeRevision] = useState(0);
+  const [draggingProfileId, setDraggingProfileId] = useState<number | null>(null);
+  const dragStartOrder = useRef<number[]>([]);
+  const dragOrder = useRef<number[]>([]);
+  const draggedProfileId = useRef<number | null>(null);
+  const lastDragTargetId = useRef<number | null>(null);
+  const suppressProfileClick = useRef(false);
 
   const selectedProfile = profiles.find((profile) => String(profile.id) === selectedProfileId) ?? null;
 
@@ -147,6 +153,65 @@ export function CharacterImporter() {
     }
   }
 
+  function startProfileDrag(event: DragEvent<HTMLButtonElement>, profileId: number) {
+    const order = profiles.map((profile) => profile.id);
+    dragStartOrder.current = order;
+    dragOrder.current = order;
+    draggedProfileId.current = profileId;
+    lastDragTargetId.current = profileId;
+    suppressProfileClick.current = true;
+    setDraggingProfileId(profileId);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", String(profileId));
+  }
+
+  function moveDraggedProfile(targetProfileId: number) {
+    const draggedId = draggedProfileId.current;
+    if (draggedId == null || draggedId === targetProfileId || lastDragTargetId.current === targetProfileId) return;
+    lastDragTargetId.current = targetProfileId;
+    setProfiles((current) => {
+      const from = current.findIndex((profile) => profile.id === draggedId);
+      const to = current.findIndex((profile) => profile.id === targetProfileId);
+      if (from < 0 || to < 0 || from === to) return current;
+      const reordered = [...current];
+      const [dragged] = reordered.splice(from, 1);
+      reordered.splice(to, 0, dragged);
+      dragOrder.current = reordered.map((profile) => profile.id);
+      return reordered;
+    });
+  }
+
+  function finishProfileDrag() {
+    setDraggingProfileId(null);
+    draggedProfileId.current = null;
+    lastDragTargetId.current = null;
+    window.setTimeout(() => { suppressProfileClick.current = false; }, 0);
+    const nextOrder = dragOrder.current;
+    const previousOrder = dragStartOrder.current;
+    if (nextOrder.length === 0 || nextOrder.every((id, index) => id === previousOrder[index])) return;
+    void saveProfileOrder(nextOrder, previousOrder);
+  }
+
+  async function saveProfileOrder(profileIds: number[], previousOrder: number[]) {
+    try {
+      const response = await apiFetch("/api/v1/profiles/order", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profileIds }),
+      });
+      if (!response.ok) {
+        const body = await readBody(response);
+        throw new Error(body.message ?? "Could not save character order.");
+      }
+    } catch (error) {
+      setProfiles((current) => {
+        const byId = new Map(current.map((profile) => [profile.id, profile]));
+        return previousOrder.map((id) => byId.get(id)).filter((profile): profile is CharacterProfile => Boolean(profile));
+      });
+      setMessage(error instanceof Error ? error.message : "Could not save character order.");
+    }
+  }
+
   return (
     <main className="character-workspace">
       <div className="workspace-heading">
@@ -157,11 +222,21 @@ export function CharacterImporter() {
       <div className="character-roster" aria-label="Your characters">
         {profiles.map((profile) => (
           <button
-            className="character-tile"
+            className={`character-tile${draggingProfileId === profile.id ? " dragging" : ""}`}
             type="button"
+            draggable
+            title="Drag to rearrange"
             aria-pressed={selectedProfileId === String(profile.id) && characterView !== "manage"}
             key={profile.id}
-            onClick={() => { setSelectedProfileId(String(profile.id)); setActiveEquipmentPreset(1); setCharacterView("overview"); void loadEquipment(String(profile.id)); }}
+            onClick={() => {
+              if (suppressProfileClick.current) return;
+              setSelectedProfileId(String(profile.id)); setActiveEquipmentPreset(1); setCharacterView("overview"); void loadEquipment(String(profile.id));
+            }}
+            onDragStart={(event) => startProfileDrag(event, profile.id)}
+            onDragEnter={(event) => { event.preventDefault(); moveDraggedProfile(profile.id); }}
+            onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; }}
+            onDrop={(event) => event.preventDefault()}
+            onDragEnd={finishProfileDrag}
           >
             <span className="character-portrait">
               {profile.imageUrl ? <Image src={profile.imageUrl} alt="" width={68} height={68} unoptimized /> : profile.name.slice(0, 1)}
