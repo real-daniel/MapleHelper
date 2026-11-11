@@ -161,4 +161,37 @@ describe("preliminary upgrade recommendations", () => {
     expect(adele?.action).not.toContain("All Stat");
     expect(xenon?.action).toContain("All Stat");
   });
+
+  it("uses MATT cube lines and probabilities for magic classes", () => {
+    const weights = new Map(equivalencies);
+    weights.set("Attack%", 1);
+    weights.set("Boss Damage", 0);
+    weights.set("IED (380)", 0);
+    const recommendation = buildRecommendations([
+      item({ id: 14, slot: "WEAPON", name: "Test Staff", starForce: 30, potentialLines: "Magic ATT +10%", catalogStarForceProfile: "WEAPON" }),
+    ], "INT", weights, DEFAULT_STAR_FORCE_SETTINGS, "Bishop").find((candidate) => candidate.kind === "Cubing");
+    expect(potentialDamageForJob("Magic ATT +13%", "Bishop", weights)).toBeCloseTo(13);
+    expect(recommendation?.action).toContain("MATT");
+    expect(recommendation?.notes).toContain("MATT");
+  });
+
+  it("includes Damage lines in boss-only offensive targets", () => {
+    const weights = new Map(equivalencies);
+    weights.set("Attack%", 0);
+    weights.set("Boss Damage", 0.2);
+    weights.set("IED (380)", 0);
+    const recommendation = buildRecommendations([
+      item({ id: 15, slot: "EMBLEM", name: "Test Emblem", starForce: 30, potentialLines: "Damage +10%", catalogStarForceProfile: "NONE" }),
+    ], "STR", weights, DEFAULT_STAR_FORCE_SETTINGS, "Adele").find((candidate) => candidate.kind === "Cubing");
+    expect(recommendation?.action).toContain("Damage");
+  });
+
+  it("never recommends an impossible three-non-prime potential", () => {
+    const weights = new Map(equivalencies);
+    weights.set("STR%", 0.1);
+    const recommendation = buildRecommendations([
+      item({ id: 16, starForce: 30, potentialLines: "STR +13%" }),
+    ], "STR", weights, DEFAULT_STAR_FORCE_SETTINGS, "Adele").find((candidate) => candidate.kind === "Cubing");
+    expect(recommendation?.action).not.toContain("3 non-prime");
+  });
 });

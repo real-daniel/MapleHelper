@@ -28,6 +28,7 @@ describe("character profile API", () => {
     database = new DatabaseSync(":memory:");
     database.exec("PRAGMA foreign_keys=ON");
     database.exec(readFileSync(new URL("../../migrations/0001_initial.sql", import.meta.url), "utf8"));
+    database.exec(readFileSync(new URL("../../migrations/0019_character_stat_equivalencies.sql", import.meta.url), "utf8"));
     database.prepare(`INSERT INTO app_users(id,discord_user_id,username,display_name,created_at,updated_at)
       VALUES (1,'discord-1','user-1','User 1','now','now')`).run();
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("session-1"));
@@ -38,6 +39,8 @@ describe("character profile API", () => {
       VALUES (?,1,?,'Old World','Old Job','NORTH_AMERICA',1,2,NULL,'https://old.example','old','created','old')`);
     insert.run(1, "FreshCharacter");
     insert.run(2, "UnavailableCharacter");
+    database.prepare("UPDATE character_profiles SET stat_equivalencies=? WHERE id=1")
+      .run(JSON.stringify([{ stat: "STR", quantity: 30, finalDamagePercent: 0.235 }]));
     env = { DB: d1(database), APP_URL: "http://localhost:8787", NEXON_BASE_URL: "https://www.nexon.com" };
   });
 
@@ -72,7 +75,10 @@ describe("character profile API", () => {
     expect(response.status).toBe(200);
     expect(requestedNames.sort()).toEqual(["FreshCharacter", "UnavailableCharacter"]);
     expect(profiles).toEqual(expect.arrayContaining([
-      expect.objectContaining({ name: "FreshCharacter", world: "Kronos", job: "Hero", weeklyRank: 42, weeklyExperience: 987654 }),
+      expect.objectContaining({
+        name: "FreshCharacter", world: "Kronos", job: "Hero", weeklyRank: 42, weeklyExperience: 987654,
+        statEquivalencies: [{ stat: "STR", quantity: 30, finalDamagePercent: 0.235 }],
+      }),
       expect.objectContaining({ name: "UnavailableCharacter", world: "Old World", job: "Old Job", weeklyRank: 1, weeklyExperience: 2 }),
     ]));
   });

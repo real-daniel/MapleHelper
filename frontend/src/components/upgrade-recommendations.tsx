@@ -40,6 +40,9 @@ type PotentialBenchmark = {
   difficulty: number;
   probabilityInput: ProbabilityInput;
   cubeType: RecommendationCubeType;
+  usefulCategories?: string[];
+  outcomeScore?: (outcome: CubeLine[]) => number;
+  minimumScore?: number;
 };
 
 type CubeLine = [string, number | string | string[], number];
@@ -79,11 +82,14 @@ const EMPTY_CUBE_INPUT = {
 const CUBE_CATEGORY = {
   STR_PERC: "STR %",
   DEX_PERC: "DEX %",
+  INT_PERC: "INT %",
   LUK_PERC: "LUK %",
   MAXHP_PERC: "Max HP %",
   ALLSTATS_PERC: "All Stats %",
   ATT_PERC: "ATT %",
+  MATT_PERC: "MATT %",
   BOSSDMG_PERC: "Boss Damage",
+  DAMAGE_PERC: "Damage %",
   IED_PERC: "Ignore Enemy Defense %",
   MESO_PERC: "Meso Amount %",
   DROP_PERC: "Item Drop Rate %",
@@ -336,7 +342,7 @@ function cubingRecommendation(item: EquipmentItem, profile: ClassStatProfile, eq
   if (damageGain <= 0) return null;
 
   const tierUpCost = targetTier === tier ? 0 : expectedTierUpCost(tier, targetTier, itemLevel);
-  const rerollCost = expectedRerollCost(target.probabilityInput, targetTier, itemLevel, item.slot, target.cubeType);
+  const rerollCost = expectedRerollCost(target, targetTier, itemLevel, item.slot, target.cubeType);
   const expectedCost = tierUpCost + rerollCost;
   if (expectedCost <= 0) return null;
 
@@ -348,7 +354,7 @@ function cubingRecommendation(item: EquipmentItem, profile: ClassStatProfile, eq
     expectedCost,
     damageGain,
     efficiency: damageGain / (expectedCost / 1_000_000_000),
-    notes: `${targetTier === tier ? "" : "Bright cubes for tier-up, "}${target.cubeType === "black" ? "Bright" : "Red"} cubes for reroll. Benchmark step: ${target.description}.`,
+    notes: `${targetTier === tier ? "" : "Bright cubes for tier-up, "}${target.cubeType === "black" ? "Bright" : "Red"} cubes for reroll. Benchmark step: ${target.description}; expected cost counts any roll meeting or beating its saved-FD value.`,
   };
 }
 
@@ -472,7 +478,7 @@ function potentialBenchmarks(
 ): PotentialBenchmark[] {
   if (slot === "GLOVES") return gloveBenchmarks(tier, itemLevel, profile, equivalencies);
   if (slot === "WEAPON" || slot === "SECONDARY" || slot === "EMBLEM") {
-    return offensiveBenchmarks(slot, tier, itemLevel, equivalencies);
+    return offensiveBenchmarks(slot, tier, itemLevel, profile, equivalencies);
   }
 
   return statBenchmarks(tier, itemLevel, profile, equivalencies);
@@ -484,7 +490,6 @@ function statBenchmarks(tier: CubeTier, itemLevel: number, profile: ClassStatPro
     { primeLines: 0, nonPrimeLines: 2 },
     { primeLines: 1, nonPrimeLines: 1 },
     { primeLines: 2, nonPrimeLines: 0 },
-    { primeLines: 0, nonPrimeLines: 3 },
     { primeLines: 1, nonPrimeLines: 2 },
     { primeLines: 2, nonPrimeLines: 1 },
     { primeLines: 3, nonPrimeLines: 0 },
@@ -492,13 +497,17 @@ function statBenchmarks(tier: CubeTier, itemLevel: number, profile: ClassStatPro
 
   return combinations.map(({ primeLines, nonPrimeLines }) => {
     const amount = primeLines * bestStat.primeValue + nonPrimeLines * bestStat.nonPrimeValue;
+    const value = amount * bestStat.weight;
     return {
-      value: amount * bestStat.weight,
+      value,
       difficulty: amount,
       probabilityInput: cubeInput({ [bestStat.probabilityField]: amount }),
       cubeType: primeLines > 0 ? "black" as RecommendationCubeType : "red" as RecommendationCubeType,
       label: lineMixLabel(primeLines, nonPrimeLines, `${amount}% ${bestStat.label}`),
       description: `${primeLines} prime line(s), ${nonPrimeLines} non-prime line(s) at ${title(tier)}`,
+      usefulCategories: statPotentialCategories(profile),
+      outcomeScore: (outcome: CubeLine[]) => statPotentialOutcomeDamage(outcome, profile, equivalencies),
+      minimumScore: value,
     };
   }).sort((left, right) => left.value - right.value);
 }
@@ -514,8 +523,8 @@ function gloveBenchmarks(tier: CubeTier, itemLevel: number, profile: ClassStatPr
   const statWeight = bestStat.weight;
   const possibleLines = [
     { label: "Crit Damage", value: critDamageLine * critDamageWeight, difficulty: critDamageLine, detail: `${critDamageLine}% Crit Damage` },
-    { label: "Prime main stat", value: primeStat * statWeight, difficulty: primeStat, detail: `${primeStat}% main stat` },
-    { label: "Non-prime main stat", value: nonPrimeStat * statWeight, difficulty: nonPrimeStat, detail: `${nonPrimeStat}% main stat` },
+    { label: "Prime target stat", value: primeStat * statWeight, difficulty: primeStat, detail: `${primeStat}% ${bestStat.label}` },
+    { label: "Non-prime target stat", value: nonPrimeStat * statWeight, difficulty: nonPrimeStat, detail: `${nonPrimeStat}% ${bestStat.label}` },
   ];
 
   const twoLineCrit = {
@@ -525,6 +534,9 @@ function gloveBenchmarks(tier: CubeTier, itemLevel: number, profile: ClassStatPr
     cubeType: "black" as RecommendationCubeType,
     label: `2 Crit (${2 * critDamageLine}% Crit Damage)`,
     description: "2 Legendary crit damage lines",
+    usefulCategories: [...statPotentialCategories(profile), CUBE_CATEGORY.CRITDMG_PERC],
+    outcomeScore: (outcome: CubeLine[]) => glovePotentialOutcomeDamage(outcome, profile, equivalencies),
+    minimumScore: 2 * critDamageLine * critDamageWeight,
   };
 
   return [
@@ -533,8 +545,8 @@ function gloveBenchmarks(tier: CubeTier, itemLevel: number, profile: ClassStatPr
     .filter((combination) => combination.some((line) => line.label === "Crit Damage"))
     .map((combination) => {
       const critLines = combination.filter((line) => line.label === "Crit Damage").length;
-      const primeStatLines = combination.filter((line) => line.label === "Prime main stat").length;
-      const nonPrimeStatLines = combination.filter((line) => line.label === "Non-prime main stat").length;
+      const primeStatLines = combination.filter((line) => line.label === "Prime target stat").length;
+      const nonPrimeStatLines = combination.filter((line) => line.label === "Non-prime target stat").length;
       const statPercent = primeStatLines * primeStat + nonPrimeStatLines * nonPrimeStat;
       const details = [
         critLines ? `${critLines} Crit` : "",
@@ -546,8 +558,11 @@ function gloveBenchmarks(tier: CubeTier, itemLevel: number, profile: ClassStatPr
         difficulty: combination.reduce((sum, line) => sum + line.difficulty, 0),
         probabilityInput: cubeInput({ lineCritDamage: critLines, ...(statPercent ? { [bestStat.probabilityField]: statPercent } : {}) }),
         cubeType: "black" as RecommendationCubeType,
-        label: `${details} (${critLines * critDamageLine}% Crit Damage${statPercent ? `, ${statPercent}% main stat` : ""})`,
+        label: `${details} (${critLines * critDamageLine}% Crit Damage${statPercent ? `, ${statPercent}% ${bestStat.label}` : ""})`,
         description: combination.map((line) => line.detail).join(", "),
+        usefulCategories: [...statPotentialCategories(profile), CUBE_CATEGORY.CRITDMG_PERC],
+        outcomeScore: (outcome: CubeLine[]) => glovePotentialOutcomeDamage(outcome, profile, equivalencies),
+        minimumScore: combination.reduce((sum, line) => sum + line.value, 0),
       };
     }),
   ]
@@ -573,13 +588,65 @@ function bestPotentialStat(profile: ClassStatProfile, equivalencies: Map<string,
   return candidates.reduce((best, candidate) => candidate.primeValue * candidate.weight > best.primeValue * best.weight ? candidate : best);
 }
 
-function offensiveBenchmarks(slot: EquipmentSlot, tier: CubeTier, itemLevel: number, equivalencies: Map<string, number>) {
-  const options = offensiveLineOptions(slot, tier, itemLevel, equivalencies);
+function statPotentialCategories(profile: ClassStatProfile) {
+  const categories = new Set<string>([CUBE_CATEGORY.ALLSTATS_PERC]);
+  for (const stat of [...profile.primaryStats, ...profile.secondaryStats]) {
+    const category = statPotentialCategory(stat);
+    if (category) categories.add(category);
+  }
+  return [...categories];
+}
+
+function statPotentialCategory(stat: CharacterDamageStat) {
+  if (stat === "STR") return CUBE_CATEGORY.STR_PERC;
+  if (stat === "DEX") return CUBE_CATEGORY.DEX_PERC;
+  if (stat === "INT") return CUBE_CATEGORY.INT_PERC;
+  if (stat === "LUK") return CUBE_CATEGORY.LUK_PERC;
+  if (stat === "Max HP") return CUBE_CATEGORY.MAXHP_PERC;
+  return null;
+}
+
+function statPotentialOutcomeDamage(outcome: CubeLine[], profile: ClassStatProfile, equivalencies: Map<string, number>) {
+  let total = 0;
+  for (const [category, value] of outcome) {
+    if (typeof value !== "number") continue;
+    if (category === CUBE_CATEGORY.ALLSTATS_PERC) {
+      total += value * (equivalencies.get("All Stat%") ?? 0);
+      continue;
+    }
+    const stat = [...profile.primaryStats, ...profile.secondaryStats].find((candidate) => statPotentialCategory(candidate) === category);
+    if (stat) total += value * (equivalencies.get(`${stat}%`) ?? 0);
+  }
+  return total;
+}
+
+function glovePotentialOutcomeDamage(outcome: CubeLine[], profile: ClassStatProfile, equivalencies: Map<string, number>) {
+  return statPotentialOutcomeDamage(outcome, profile, equivalencies)
+    + cubeTotal(outcome, CUBE_CATEGORY.CRITDMG_PERC, true) * (equivalencies.get("Critical Dmg") ?? 0);
+}
+
+function offensivePotentialCategories(slot: EquipmentSlot, profile: ClassStatProfile) {
+  return [
+    profile.attackStat === "Magic Attack" ? CUBE_CATEGORY.MATT_PERC : CUBE_CATEGORY.ATT_PERC,
+    CUBE_CATEGORY.DAMAGE_PERC,
+    ...(slot === "EMBLEM" ? [] : [CUBE_CATEGORY.BOSSDMG_PERC]),
+    CUBE_CATEGORY.IED_PERC,
+  ];
+}
+
+function offensivePotentialOutcomeDamage(outcome: CubeLine[], profile: ClassStatProfile, equivalencies: Map<string, number>) {
+  const attackCategory = profile.attackStat === "Magic Attack" ? CUBE_CATEGORY.MATT_PERC : CUBE_CATEGORY.ATT_PERC;
+  return cubeTotal(outcome, attackCategory, true) * (equivalencies.get("Attack%") ?? 0)
+    + (cubeTotal(outcome, CUBE_CATEGORY.BOSSDMG_PERC, true) + cubeTotal(outcome, CUBE_CATEGORY.DAMAGE_PERC, true)) * (equivalencies.get("Boss Damage") ?? 0)
+    + cubeTotal(outcome, CUBE_CATEGORY.IED_PERC, true) * iedWeight(equivalencies);
+}
+
+function offensiveBenchmarks(slot: EquipmentSlot, tier: CubeTier, itemLevel: number, profile: ClassStatProfile, equivalencies: Map<string, number>) {
+  const options = offensiveLineOptions(slot, tier, itemLevel, profile, equivalencies);
   const combinations = [
     { primeLines: 0, nonPrimeLines: 2 },
     { primeLines: 1, nonPrimeLines: 1 },
     { primeLines: 2, nonPrimeLines: 0 },
-    { primeLines: 0, nonPrimeLines: 3 },
     { primeLines: 1, nonPrimeLines: 2 },
     { primeLines: 2, nonPrimeLines: 1 },
     { primeLines: 3, nonPrimeLines: 0 },
@@ -592,18 +659,24 @@ function offensiveBenchmarks(slot: EquipmentSlot, tier: CubeTier, itemLevel: num
       probabilityInput: mix.probabilityInput,
       cubeType: primeLines > 0 ? "black" : "red" as RecommendationCubeType,
       label: lineMixLabel(primeLines, nonPrimeLines, mix.label),
-      description: `${mix.description}; ${slot === "EMBLEM" ? "emblems exclude boss damage" : "ATT weighted first, boss next, IED lowest"}`,
+      description: `${mix.description}; ${slot === "EMBLEM" ? "emblems exclude boss damage" : "offensive lines ranked by saved FD equivalencies"}`,
+      usefulCategories: offensivePotentialCategories(slot, profile),
+      outcomeScore: (outcome: CubeLine[]) => offensivePotentialOutcomeDamage(outcome, profile, equivalencies),
+      minimumScore: mix.value,
     })))
     .filter(uniqueBenchmark)
     .sort((left, right) => left.value - right.value);
 }
 
-function offensiveLineOptions(slot: EquipmentSlot, tier: CubeTier, itemLevel: number, equivalencies: Map<string, number>) {
+function offensiveLineOptions(slot: EquipmentSlot, tier: CubeTier, itemLevel: number, profile: ClassStatProfile, equivalencies: Map<string, number>) {
   const primeAttack = primeLineValue(itemLevel, tier);
   const nonPrimeAttack = Math.max(1, primeAttack - 3);
+  const attackLabel = profile.attackStat === "Magic Attack" ? "MATT" : "ATT";
   const options = [
-    lineOption("ATT", "percAtt", true, primeAttack, equivalencies.get("Attack%") ?? 0, 1),
-    lineOption("ATT", "percAtt", false, nonPrimeAttack, equivalencies.get("Attack%") ?? 0, 1),
+    lineOption(attackLabel, "percAtt", true, primeAttack, equivalencies.get("Attack%") ?? 0, 1),
+    lineOption(attackLabel, "percAtt", false, nonPrimeAttack, equivalencies.get("Attack%") ?? 0, 1),
+    lineOption("Damage", "percBoss", true, primeAttack, equivalencies.get("Boss Damage") ?? 0, 1),
+    lineOption("Damage", "percBoss", false, nonPrimeAttack, equivalencies.get("Boss Damage") ?? 0, 1),
   ];
 
   if (tier === "unique" || tier === "legendary") {
@@ -698,13 +771,13 @@ function expectedTierUpCost(current: CubeTier, desired: CubeTier, level: number)
 }
 
 function expectedRerollCost(
-  probabilityInput: ProbabilityInput,
+  target: PotentialBenchmark,
   tier: CubeTier,
   level: number,
   slot: EquipmentSlot,
   cubeType: RecommendationCubeType,
 ) {
-  const probability = cubeProbability(CUBE_TIER_NUMBER[tier], probabilityInput, cubeItemType(slot), level, cubeType);
+  const probability = cubeProbability(CUBE_TIER_NUMBER[tier], target, cubeItemType(slot), level, cubeType);
   return geometricMean(probability) * cubeCost(level, cubeType);
 }
 
@@ -720,12 +793,13 @@ function geometricMean(probability: number) {
 
 function cubeProbability(
   desiredTier: CubeTierNumber,
-  probabilityInput: ProbabilityInput,
+  target: PotentialBenchmark,
   itemType: CubeItemType,
   itemLevel: number,
   cubeType: RecommendationCubeType,
 ) {
-  if (Object.values(probabilityInput).every((value) => value === 0)) return 1;
+  const probabilityInput = target.probabilityInput;
+  if (!target.outcomeScore && Object.values(probabilityInput).every((value) => value === 0)) return 1;
 
   const tier = CUBE_TIER_ORDER[desiredTier];
   const itemLabel = itemType === "accessory" ? "ring" : itemType === "badge" ? "heart" : itemType;
@@ -738,7 +812,7 @@ function cubeProbability(
     third_line: source.third_line as CubeLine[],
   }, itemLevel);
 
-  const usefulCategories = cubeUsefulCategories(probabilityInput);
+  const usefulCategories = target.usefulCategories ?? cubeUsefulCategories(probabilityInput);
   const consolidated = {
     first_line: consolidateCubeRates(cubeData.first_line, usefulCategories),
     second_line: consolidateCubeRates(cubeData.second_line, usefulCategories),
@@ -750,7 +824,10 @@ function cubeProbability(
     for (const line2 of consolidated.second_line) {
       for (const line3 of consolidated.third_line) {
         const outcome = [line1, line2, line3];
-        if (cubeOutcomeSatisfies(outcome, probabilityInput)) totalChance += cubeOutcomeRate(outcome, consolidated);
+        const satisfies = target.outcomeScore
+          ? target.outcomeScore(outcome) + 1e-9 >= (target.minimumScore ?? target.value)
+          : cubeOutcomeSatisfies(outcome, probabilityInput);
+        if (satisfies) totalChance += cubeOutcomeRate(outcome, consolidated);
       }
     }
   }
@@ -816,23 +893,13 @@ function cubeTotal(outcome: CubeLine[], desiredCategory: string, byValue = false
   }, 0);
 }
 
-function cubeAllStatSatisfied(outcome: CubeLine[], required: number) {
-  let actual = 0;
-  for (const [category, value] of outcome) {
-    if (typeof value !== "number") continue;
-    if (category === CUBE_CATEGORY.ALLSTATS_PERC) actual += value;
-    else if (([CUBE_CATEGORY.STR_PERC, CUBE_CATEGORY.DEX_PERC, CUBE_CATEGORY.LUK_PERC] as string[]).includes(category)) actual += value / 3;
-  }
-  return actual >= required;
-}
-
 function cubeOutcomeSatisfies(outcome: CubeLine[], input: ProbabilityInput) {
   return Object.entries(input).every(([field, required]) => {
     if (required <= 0) return true;
     switch (field) {
       case "percStat": return cubeTotal(outcome, CUBE_CATEGORY.STR_PERC, true) + cubeTotal(outcome, CUBE_CATEGORY.ALLSTATS_PERC, true) >= required;
       case "lineStat": return cubeTotal(outcome, CUBE_CATEGORY.STR_PERC) + cubeTotal(outcome, CUBE_CATEGORY.ALLSTATS_PERC) >= required;
-      case "percAllStat": return cubeAllStatSatisfied(outcome, required);
+      case "percAllStat": return cubeTotal(outcome, CUBE_CATEGORY.ALLSTATS_PERC, true) >= required;
       case "lineAllStat": return cubeTotal(outcome, CUBE_CATEGORY.ALLSTATS_PERC) >= required;
       case "percHp": return cubeTotal(outcome, CUBE_CATEGORY.MAXHP_PERC, true) >= required;
       case "lineHp": return cubeTotal(outcome, CUBE_CATEGORY.MAXHP_PERC) >= required;
@@ -888,7 +955,11 @@ function cubeOutcomeRate(outcome: CubeLine[], filteredRates: { first_line: CubeL
 
 function adjustCubeDataForLevel(cubeData: { first_line: CubeLine[]; second_line: CubeLine[]; third_line: CubeLine[] }, itemLevel: number) {
   if (itemLevel < 160) return cubeData;
-  const affected = new Set([CUBE_CATEGORY.STR_PERC, CUBE_CATEGORY.LUK_PERC, CUBE_CATEGORY.DEX_PERC, CUBE_CATEGORY.ALLSTATS_PERC, CUBE_CATEGORY.ATT_PERC, CUBE_CATEGORY.MAXHP_PERC, "INT %", "MATT %"]);
+  const affected = new Set<string>([
+    CUBE_CATEGORY.STR_PERC, CUBE_CATEGORY.DEX_PERC, CUBE_CATEGORY.INT_PERC, CUBE_CATEGORY.LUK_PERC,
+    CUBE_CATEGORY.ALLSTATS_PERC, CUBE_CATEGORY.ATT_PERC, CUBE_CATEGORY.MATT_PERC,
+    CUBE_CATEGORY.DAMAGE_PERC, CUBE_CATEGORY.MAXHP_PERC,
+  ]);
   const adjustLine = ([category, value, rate]: CubeLine): CubeLine => [category, affected.has(category) && typeof value === "number" ? value + 1 : value, rate];
   return {
     first_line: cubeData.first_line.map(adjustLine),
@@ -1012,6 +1083,8 @@ function normalizeLabel(value: string) {
   if (compact === "dex") return "DEX";
   if (compact === "int") return "INT";
   if (compact === "luk") return "LUK";
+  if (compact.includes("magicatt%") || compact.includes("matt%")) return "Attack%";
+  if (compact.includes("magicatt") || compact === "matt") return "Attack";
   if (compact.includes("attack%")) return "Attack%";
   if (compact.includes("attack")) return "Attack";
   return value.trim();
