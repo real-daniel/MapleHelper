@@ -57,11 +57,28 @@ app.use("/api/v1/profiles", requireAuth, requireCsrf);
 app.use("/api/v1/profiles/*", requireAuth, requireCsrf);
 
 app.get("/api/v1/profiles", async (c) => {
+  const userId = currentUser(c).id;
+  const savedProfiles = await c.env.DB.prepare(`
+    SELECT id, name, region FROM character_profiles WHERE app_user_id = ?
+  `).bind(userId).all<{ id: number; name: string; region: string }>();
+  await Promise.all(savedProfiles.results.map(async (profile) => {
+    let imported;
+    try {
+      imported = await importCharacter(c.env.NEXON_BASE_URL, profile.name, profile.region);
+    } catch {
+      // Keep the saved profile available when Nexon's rankings API is temporarily unavailable.
+      return;
+    }
+    await c.env.DB.prepare(`UPDATE character_profiles SET name=?, world=?, job=?, weekly_rank=?, weekly_experience=?,
+      image_url=?, source_url=?, retrieved_at=?, updated_at=? WHERE id=? AND app_user_id=?`)
+      .bind(imported.name, imported.world, imported.job, imported.weeklyRank, imported.weeklyExperience,
+        imported.imageUrl, imported.sourceUrl, imported.retrievedAt, new Date().toISOString(), profile.id, userId).run();
+  }));
   const rows = await c.env.DB.prepare(`
     SELECT id, name, world, job, region, weekly_rank, weekly_experience, image_url, source_url,
       retrieved_at, stat_equivalencies, created_at, updated_at
     FROM character_profiles WHERE app_user_id = ? ORDER BY updated_at DESC
-  `).bind(currentUser(c).id).all<Record<string, unknown>>();
+  `).bind(userId).all<Record<string, unknown>>();
   return c.json(rows.results.map(publicProfile));
 });
 
