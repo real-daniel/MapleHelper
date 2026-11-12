@@ -69,6 +69,7 @@ export function CharacterImporter() {
   const dragOrder = useRef<number[]>([]);
   const draggedProfileId = useRef<number | null>(null);
   const pointerDrag = useRef<ProfilePointerDrag | null>(null);
+  const roster = useRef<HTMLDivElement | null>(null);
   const pendingTileRects = useRef<Map<number, DOMRect> | null>(null);
   const tileAnimations = useRef(new Map<number, Animation>());
   const suppressProfileClick = useRef(false);
@@ -233,17 +234,21 @@ export function CharacterImporter() {
       setDraggingProfileId(profile.id);
     }
     event.preventDefault();
+    const rosterElement = roster.current;
+    if (!rosterElement) return;
+    const rosterBounds = rosterElement.getBoundingClientRect();
+    const left = clamp(drag.originLeft + deltaX, rosterBounds.left, Math.max(rosterBounds.left, rosterBounds.right - drag.width));
+    const top = clamp(drag.originTop + deltaY, rosterBounds.top, Math.max(rosterBounds.top, rosterBounds.bottom - drag.height));
     setDragOverlay({
       profile,
-      left: drag.originLeft + deltaX,
-      top: drag.originTop + deltaY,
+      left,
+      top,
       width: drag.width,
       height: drag.height,
     });
 
-    const hovered = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>("[data-profile-id]");
-    const targetProfileId = Number(hovered?.dataset.profileId);
-    if (Number.isInteger(targetProfileId)) moveDraggedProfile(targetProfileId);
+    const targetProfileId = nearestProfileId(rosterElement, left + drag.width / 2, top + drag.height / 2);
+    if (targetProfileId != null) moveDraggedProfile(targetProfileId);
   }
 
   function releaseProfileDrag(event: ReactPointerEvent<HTMLButtonElement>) {
@@ -314,7 +319,7 @@ export function CharacterImporter() {
         <button className="primary-button" type="button" onClick={() => setCharacterView("manage")}>+ Add character</button>
       </div>
 
-      <div className="character-roster" aria-label="Your characters">
+      <div className="character-roster" aria-label="Your characters" ref={roster}>
         {profiles.map((profile) => (
           <button
             className={`character-tile${draggingProfileId === profile.id ? " dragging" : ""}`}
@@ -424,6 +429,28 @@ function captureProfileTileRects() {
     Number(tile.dataset.profileId),
     tile.getBoundingClientRect(),
   ]));
+}
+
+function nearestProfileId(roster: HTMLDivElement, clientX: number, clientY: number) {
+  let nearest: { id: number; distance: number } | null = null;
+  for (const tile of roster.querySelectorAll<HTMLElement>("[data-profile-id]")) {
+    const rect = untransformedRect(tile);
+    const distance = Math.hypot(clientX - (rect.left + rect.width / 2), clientY - (rect.top + rect.height / 2));
+    if (!nearest || distance < nearest.distance) nearest = { id: Number(tile.dataset.profileId), distance };
+  }
+  return nearest && Number.isInteger(nearest.id) ? nearest.id : null;
+}
+
+function untransformedRect(element: HTMLElement) {
+  const rect = element.getBoundingClientRect();
+  const transform = getComputedStyle(element).transform;
+  if (transform === "none") return rect;
+  const matrix = new DOMMatrixReadOnly(transform);
+  return { left: rect.left - matrix.m41, top: rect.top - matrix.m42, width: rect.width, height: rect.height };
+}
+
+function clamp(value: number, minimum: number, maximum: number) {
+  return Math.min(Math.max(value, minimum), maximum);
 }
 
 function formatCompactNumber(value: number) {
