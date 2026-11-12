@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { DragEvent, FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, PointerEvent as ReactPointerEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { UpgradeRecommendations } from "@/components/upgrade-recommendations";
 import { BossTracker } from "@/components/boss-tracker";
 import { AccountBossIncome } from "@/components/account-boss-income";
@@ -31,6 +31,26 @@ type CharacterProfile = ImportedCharacter & {
   updatedAt: string;
 };
 
+type ProfilePointerDrag = {
+  pointerId: number;
+  profileId: number;
+  startX: number;
+  startY: number;
+  originLeft: number;
+  originTop: number;
+  width: number;
+  height: number;
+  started: boolean;
+};
+
+type ProfileDragOverlay = {
+  profile: CharacterProfile;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
+
 export function CharacterImporter() {
   const [name, setName] = useState("");
   const [region, setRegion] = useState<Region>("NORTH_AMERICA");
@@ -44,10 +64,14 @@ export function CharacterImporter() {
   const [characterView, setCharacterView] = useState<"overview" | "equipment" | "stats" | "upgrades" | "bosses" | "manage">("overview");
   const [bossIncomeRevision, setBossIncomeRevision] = useState(0);
   const [draggingProfileId, setDraggingProfileId] = useState<number | null>(null);
+  const [dragOverlay, setDragOverlay] = useState<ProfileDragOverlay | null>(null);
   const dragStartOrder = useRef<number[]>([]);
   const dragOrder = useRef<number[]>([]);
   const draggedProfileId = useRef<number | null>(null);
   const lastDragTargetId = useRef<number | null>(null);
+  const pointerDrag = useRef<ProfilePointerDrag | null>(null);
+  const pendingTileRects = useRef<Map<number, DOMRect> | null>(null);
+  const tileAnimations = useRef(new Map<number, Animation>());
   const suppressProfileClick = useRef(false);
 
   const selectedProfile = profiles.find((profile) => String(profile.id) === selectedProfileId) ?? null;
@@ -58,6 +82,30 @@ export function CharacterImporter() {
     // The test harness should perform one startup load only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useLayoutEffect(() => {
+    const previousRects = pendingTileRects.current;
+    pendingTileRects.current = null;
+    if (!previousRects) return;
+
+    for (const [profileId, previous] of previousRects) {
+      if (profileId === draggedProfileId.current) continue;
+      const tile = document.querySelector<HTMLElement>(`[data-profile-id="${profileId}"]`);
+      if (!tile) continue;
+      tileAnimations.current.get(profileId)?.cancel();
+      tileAnimations.current.delete(profileId);
+      const current = tile.getBoundingClientRect();
+      const deltaX = previous.left - current.left;
+      const deltaY = previous.top - current.top;
+      if (Math.abs(deltaX) < 0.5 && Math.abs(deltaY) < 0.5) continue;
+      const animation = tile.animate([
+        { transform: `translate(${deltaX}px, ${deltaY}px)` },
+        { transform: "translate(0, 0)" },
+      ], { duration: 180, easing: "cubic-bezier(.2, .8, .2, 1)" });
+      tileAnimations.current.set(profileId, animation);
+      animation.addEventListener("finish", () => tileAnimations.current.delete(profileId), { once: true });
+    }
+  }, [profiles]);
 
   async function loadProfiles() {
     setMessage("");
@@ -153,26 +201,78 @@ export function CharacterImporter() {
     }
   }
 
-  function startProfileDrag(event: DragEvent<HTMLButtonElement>, profileId: number) {
+  function prepareProfileDrag(event: ReactPointerEvent<HTMLButtonElement>, profile: CharacterProfile) {
+    if (event.button !== 0 || pointerDrag.current) return;
+    const rect = event.currentTarget.getBoundingClientRect();
     const order = profiles.map((profile) => profile.id);
     dragStartOrder.current = order;
     dragOrder.current = order;
-    draggedProfileId.current = profileId;
-    lastDragTargetId.current = profileId;
-    suppressProfileClick.current = true;
-    setDraggingProfileId(profileId);
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", String(profileId));
+    draggedProfileId.current = profile.id;
+    lastDragTargetId.current = profile.id;
+    pointerDrag.current = {
+      pointerId: event.pointerId,
+      profileId: profile.id,
+      startX: event.clientX,
+      startY: event.clientY,
+      originLeft: rect.left,
+      originTop: rect.top,
+      width: rect.width,
+      height: rect.height,
+      started: false,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function updateProfileDrag(event: ReactPointerEvent<HTMLButtonElement>, profile: CharacterProfile) {
+    const drag = pointerDrag.current;
+    if (!drag || drag.pointerId !== event.pointerId || drag.profileId !== profile.id) return;
+    const deltaX = event.clientX - drag.startX;
+    const deltaY = event.clientY - drag.startY;
+    if (!drag.started) {
+      if (Math.hypot(deltaX, deltaY) < 5) return;
+      drag.started = true;
+      suppressProfileClick.current = true;
+      setDraggingProfileId(profile.id);
+    }
+    event.preventDefault();
+    setDragOverlay({
+      profile,
+      left: drag.originLeft + deltaX,
+      top: drag.originTop + deltaY,
+      width: drag.width,
+      height: drag.height,
+    });
+
+    const hovered = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>("[data-profile-id]");
+    const targetProfileId = Number(hovered?.dataset.profileId);
+    if (Number.isInteger(targetProfileId)) moveDraggedProfile(targetProfileId);
+  }
+
+  function releaseProfileDrag(event: ReactPointerEvent<HTMLButtonElement>) {
+    const drag = pointerDrag.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    pointerDrag.current = null;
+    setDragOverlay(null);
+    if (drag.started) finishProfileDrag();
+    else {
+      draggedProfileId.current = null;
+      lastDragTargetId.current = null;
+    }
   }
 
   function moveDraggedProfile(targetProfileId: number) {
     const draggedId = draggedProfileId.current;
     if (draggedId == null || draggedId === targetProfileId || lastDragTargetId.current === targetProfileId) return;
     lastDragTargetId.current = targetProfileId;
+    pendingTileRects.current = captureProfileTileRects();
     setProfiles((current) => {
       const from = current.findIndex((profile) => profile.id === draggedId);
       const to = current.findIndex((profile) => profile.id === targetProfileId);
-      if (from < 0 || to < 0 || from === to) return current;
+      if (from < 0 || to < 0 || from === to) {
+        pendingTileRects.current = null;
+        return current;
+      }
       const reordered = [...current];
       const [dragged] = reordered.splice(from, 1);
       reordered.splice(to, 0, dragged);
@@ -224,22 +324,21 @@ export function CharacterImporter() {
           <button
             className={`character-tile${draggingProfileId === profile.id ? " dragging" : ""}`}
             type="button"
-            draggable
             title="Drag to rearrange"
+            data-profile-id={profile.id}
             aria-pressed={selectedProfileId === String(profile.id) && characterView !== "manage"}
             key={profile.id}
             onClick={() => {
               if (suppressProfileClick.current) return;
               setSelectedProfileId(String(profile.id)); setActiveEquipmentPreset(1); setCharacterView("overview"); void loadEquipment(String(profile.id));
             }}
-            onDragStart={(event) => startProfileDrag(event, profile.id)}
-            onDragEnter={(event) => { event.preventDefault(); moveDraggedProfile(profile.id); }}
-            onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; }}
-            onDrop={(event) => event.preventDefault()}
-            onDragEnd={finishProfileDrag}
+            onPointerDown={(event) => prepareProfileDrag(event, profile)}
+            onPointerMove={(event) => updateProfileDrag(event, profile)}
+            onPointerUp={releaseProfileDrag}
+            onPointerCancel={releaseProfileDrag}
           >
             <span className="character-portrait">
-              {profile.imageUrl ? <Image src={profile.imageUrl} alt="" width={68} height={68} unoptimized /> : profile.name.slice(0, 1)}
+              {profile.imageUrl ? <Image src={profile.imageUrl} alt="" width={68} height={68} draggable={false} unoptimized /> : profile.name.slice(0, 1)}
             </span>
             <span><strong>{profile.name}</strong><small>{profile.job} · {profile.world}</small></span>
           </button>
@@ -248,6 +347,15 @@ export function CharacterImporter() {
           <span className="character-portrait">+</span><span><strong>Add character</strong></span>
         </button>
       </div>
+
+      {dragOverlay && (
+        <div className="character-tile character-drag-overlay" aria-hidden="true" style={{ left: dragOverlay.left, top: dragOverlay.top, width: dragOverlay.width, height: dragOverlay.height }}>
+          <span className="character-portrait">
+            {dragOverlay.profile.imageUrl ? <Image src={dragOverlay.profile.imageUrl} alt="" width={68} height={68} draggable={false} unoptimized /> : dragOverlay.profile.name.slice(0, 1)}
+          </span>
+          <span><strong>{dragOverlay.profile.name}</strong><small>{dragOverlay.profile.job} · {dragOverlay.profile.world}</small></span>
+        </div>
+      )}
 
       {message && <p className="message">{message}</p>}
 
@@ -314,6 +422,13 @@ export function CharacterImporter() {
 async function readBody(response: Response) {
   const text = await response.text();
   return text ? JSON.parse(text) : {};
+}
+
+function captureProfileTileRects() {
+  return new Map([...document.querySelectorAll<HTMLElement>("[data-profile-id]")].map((tile) => [
+    Number(tile.dataset.profileId),
+    tile.getBoundingClientRect(),
+  ]));
 }
 
 function formatCompactNumber(value: number) {
