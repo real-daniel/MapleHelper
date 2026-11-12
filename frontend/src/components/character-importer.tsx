@@ -68,7 +68,6 @@ export function CharacterImporter() {
   const dragStartOrder = useRef<number[]>([]);
   const dragOrder = useRef<number[]>([]);
   const draggedProfileId = useRef<number | null>(null);
-  const lastDragTargetId = useRef<number | null>(null);
   const pointerDrag = useRef<ProfilePointerDrag | null>(null);
   const pendingTileRects = useRef<Map<number, DOMRect> | null>(null);
   const tileAnimations = useRef(new Map<number, Animation>());
@@ -208,7 +207,6 @@ export function CharacterImporter() {
     dragStartOrder.current = order;
     dragOrder.current = order;
     draggedProfileId.current = profile.id;
-    lastDragTargetId.current = profile.id;
     pointerDrag.current = {
       pointerId: event.pointerId,
       profileId: profile.id,
@@ -257,14 +255,12 @@ export function CharacterImporter() {
     if (drag.started) finishProfileDrag();
     else {
       draggedProfileId.current = null;
-      lastDragTargetId.current = null;
     }
   }
 
   function moveDraggedProfile(targetProfileId: number) {
     const draggedId = draggedProfileId.current;
-    if (draggedId == null || draggedId === targetProfileId || lastDragTargetId.current === targetProfileId) return;
-    lastDragTargetId.current = targetProfileId;
+    if (draggedId == null || draggedId === targetProfileId) return;
     pendingTileRects.current = captureProfileTileRects();
     setProfiles((current) => {
       const from = current.findIndex((profile) => profile.id === draggedId);
@@ -284,7 +280,6 @@ export function CharacterImporter() {
   function finishProfileDrag() {
     setDraggingProfileId(null);
     draggedProfileId.current = null;
-    lastDragTargetId.current = null;
     window.setTimeout(() => { suppressProfileClick.current = false; }, 0);
     const nextOrder = dragOrder.current;
     const previousOrder = dragStartOrder.current;
